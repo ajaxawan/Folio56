@@ -140,4 +140,20 @@ export function pageToParagraphs(items: Item[], pageHeight: number): { kind: 'p'
   return out
 }
 
-export const fileTitle = (name: string) => name.replace(/\.pdf$/i, '').replace(/[_]+/g, ' ').trim() || 'Untitled PDF'
+export const fileTitle = (name: string) => {
+  const base = name.replace(/\.pdf$/i, '').trim()
+  // "field-notes_v2" → "field notes v2" (only when the name has no spaces of its own)
+  return (/\s/.test(base) ? base.replace(/_+/g, ' ') : base.replace(/[_-]+/g, ' ')).replace(/\s+/g, ' ').trim() || 'Untitled PDF'
+}
+
+/**
+ * A readable title for a PDF. The PDF's own title is used when it looks like a real title — minus
+ * the "Microsoft PowerPoint - …" / "Microsoft Word - ….docx" noise Office adds when printing to PDF.
+ */
+export function cleanTitle(metaTitle: string, fileName: string) {
+  let t = (metaTitle || '').replace(/\s+/g, ' ').trim()
+  t = t.replace(/^(microsoft\s+)?(office\s+)?(power\s?point|word|excel|visio|publisher)\s*[-–—:]\s*/i, '')
+  t = t.replace(/\.(pptx?|docx?|xlsx?|pdf|odt|odp|key|pages|rtf|txt)$/i, '').trim()
+  const junk = !t || t.length < 3 || t.length > 140 || /^(untitled|document\d*|presentation\d*|slide\s?\d*|title|microsoft|pdf|scan)$/i.test(t) || /^[\w.-]+\.(tmp|dvi)$/i.test(t)
+  return junk ? fileTitle(fileName) : t
+}

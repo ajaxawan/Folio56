@@ -56,6 +56,7 @@ const makeTheme = (dark = true): Theme => ({
 
 type Ask = null | { mode: 'set' | 'enter'; then: (p: string) => void }
 
+
 /** What a host (Margins) can do with an embedded editor. */
 export interface EditorApi {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -63,12 +64,15 @@ export interface EditorApi {
   markdown: () => Promise<string>
 }
 
-export function NoteEditor({ id, onClose, onNavigate, focus, setFocus, embedded, onReady }: {
+export function NoteEditor({ id, onClose, onNavigate, focus, setFocus, embedded, onReady, initialNote }: {
   id: string; onClose: () => void; onNavigate: (id: string) => void; focus: boolean; setFocus: (v: boolean) => void
   /** Shown beside something else (the PDF in Margins): compact header, full width, Esc left to the host. */
   embedded?: boolean; onReady?: (api: EditorApi | null) => void
+  /** The note as the list already has it, so the page can draw at once instead of waiting on the database. */
+  initialNote?: Note
 }) {
-  const note = useLiveQuery(() => db.notes.get(id), [id])
+  const live = useLiveQuery(() => db.notes.get(id), [id])
+  const note = live === undefined && initialNote?.id === id ? initialNote : live
   const [content, setContent] = useState<unknown[] | null>(null)
   const [ask, setAsk] = useState<Ask>(null)
   const [error, setError] = useState('')

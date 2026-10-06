@@ -324,10 +324,12 @@ article[data-note], .no-callout { -webkit-touch-callout: none; -webkit-user-sele
 /* ---------- V5.7 Margins (PDF reader) ---------- */
 .pdf-scroller { background: color-mix(in srgb, var(--color-canvas) 92%, #000); }
 [data-mode="light"] .pdf-scroller { background: color-mix(in srgb, var(--color-canvas) 90%, #5a4a30); }
-.pdf-scroller[data-tint="warm"] .pdf-canvas, [data-tint="warm"] .pdf-canvas { filter: sepia(.22) saturate(1.05) brightness(.93) contrast(.97); }
+.pdf-scroller { touch-action: pan-x pan-y; overscroll-behavior: contain; }
+/* Warm: just takes the glare off white paper — colours in slides and photos stay true */
+.pdf-scroller[data-tint="warm"] .pdf-canvas { filter: sepia(.09) brightness(.965) contrast(.985); }
 .pdf-scroller[data-tint="night"] .pdf-canvas, [data-tint="night"] .pdf-canvas { filter: invert(.9) hue-rotate(180deg) brightness(1.05) contrast(.92) sepia(.12); }
 .pdf-scroller[data-tint="night"] .pdf-page { background: #1b1916; }
-.tint-swatch-paper { background: #fff; } .tint-swatch-warm { background: #efe2c8; } .tint-swatch-night { background: #24211d; }
+.tint-swatch-paper { background: #fff; } .tint-swatch-warm { background: #f5efe4; } .tint-swatch-night { background: #24211d; }
 .pdf-mark { mix-blend-mode: multiply; opacity: .42; border-radius: 2px; }
 .pdf-scroller[data-tint="night"] .pdf-mark { mix-blend-mode: screen; opacity: .35; }
 .pdf-scroller.snapping .textLayer { pointer-events: none; }
@@ -352,3 +354,37 @@ article[data-note], .no-callout { -webkit-touch-callout: none; -webkit-user-sele
 .wide-tables .bn-block-content:is([data-content-type="paragraph"], [data-content-type="bulletListItem"], [data-content-type="numberedListItem"], [data-content-type="checkListItem"]) { max-width: 78ch; }
 /* light paper: links in notes use the deeper accent ink so they stay readable */
 [data-mode="light"] .folio-editor a, [data-mode="light"] .folio-editor .bn-inline-content a { color: var(--color-accent-ink); }
+
+/* ---------- V5.8 polish: motion, scrolling, controls ---------- */
+/* the main list never shifts sideways when a view does or doesn't need a scrollbar */
+.main-scroll { scrollbar-gutter: stable; }
+@media (pointer: coarse) { .main-scroll { scrollbar-gutter: auto; } }
+/* headings wrap evenly (no lone word on the last line) */
+h1, h2, h3, .font-title { text-wrap: balance; }
+p { text-wrap: pretty; }
+/* view switches: a quick, quiet cross-fade with a hint of lift */
+::view-transition-old(root) { animation: vt-out .14s ease-in both; }
+::view-transition-new(root) { animation: vt-in .2s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes vt-out { to { opacity: 0; } }
+@keyframes vt-in { from { opacity: 0; transform: translateY(6px); } }
+/* checkboxes in notes match the cards: rounded, accent-filled, with a little tick */
+.folio-editor .bn-block-content[data-content-type="checkListItem"] input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; width: 1.08em; height: 1.08em; margin: 0; flex-shrink: 0; cursor: pointer;
+  border: 1.6px solid color-mix(in srgb, var(--color-muted) 85%, transparent); border-radius: 5px; background: transparent;
+  display: inline-grid; place-content: center; transition: background-color .15s ease, border-color .15s ease, transform .12s ease; }
+.folio-editor .bn-block-content[data-content-type="checkListItem"] input[type="checkbox"]:hover { border-color: var(--color-accent); }
+.folio-editor .bn-block-content[data-content-type="checkListItem"] input[type="checkbox"]:active { transform: scale(.88); }
+.folio-editor .bn-block-content[data-content-type="checkListItem"] input[type="checkbox"]:checked {
+  background: var(--color-accent) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23161210' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M3.5 8.5l3 3 6-7'/></svg>") center / 78% no-repeat; border-color: var(--color-accent); }
+.folio-editor .bn-block-content[data-content-type="checkListItem"][data-checked="true"] .bn-inline-content { color: var(--color-muted); }
+/* keyboard shortcut badges in the / menu mean nothing on a touch screen */
+@media (pointer: coarse) { .bn-suggestion-menu .bn-mt-suggestion-menu-item-section[data-position="right"] { display: none; } }
+/* reading a PDF: notices sit above the page bar */
+[data-reading] [role="status"].fixed { bottom: calc(env(safe-area-inset-bottom) + 76px) !important; }
+/* smoother scrolling surfaces */
+.main-scroll, .pdf-scroller, .folio-editor { -webkit-overflow-scrolling: touch; }
+/* a view waiting behind an open note: kept (scroll, state) but skipped by the browser's style and paint work */
+.parked { visibility: hidden; content-visibility: hidden; }
+.folio-editor .bn-block-content[data-content-type="checkListItem"] > div[contenteditable="false"] { display: flex; align-items: center; align-self: flex-start; height: 1.7em; margin-right: .6em; }
+/* rows that scroll sideways on phones show a soft edge, so it's clear there's more */
+@media (max-width: 639px) { .fade-edge { mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); } }

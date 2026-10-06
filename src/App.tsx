@@ -3,7 +3,7 @@ import {
   Archive, ArchiveRestore, ArrowDownUp, BookOpen, BookOpenText, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon,
   Layers, Link2, Mic, PanelLeftOpen, Palette, Pin, RotateCcw, Search, Send, Settings as SettingsIcon, SquarePen, Sun, Tag, Trash2, X,
 } from 'lucide-react'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Board } from './components/Board'
 import { EmptyArt } from './components/EmptyArt'
@@ -125,7 +125,20 @@ export default function App() {
     if ((history.state as { note?: string } | null)?.note) history.back()
     transition(() => setOpenId(null), openRef.current)
   }, [])
-  const setView = (v: View) => { setViewRaw(v); setScrolled(false); setDrawer(false); setSelected(new Set()); if (openId) closeNote() }
+  // Each view remembers where you were scrolled to; switching views cross-fades instead of jumping.
+  const mainScroll = useRef<HTMLDivElement>(null)
+  const scrollMemo = useRef(new Map<string, number>())
+  const viewKey = (v: View) => (v.kind === 'label' ? `label:${v.labelId}` : v.kind)
+  const setView = (v: View) => {
+    if (mainScroll.current) scrollMemo.current.set(viewKey(view), mainScroll.current.scrollTop)
+    const go = () => { setViewRaw(v); setScrolled(false); setDrawer(false); setSelected(new Set()) }
+    if (openId) { closeNote(); go() } else if (viewKey(v) !== viewKey(view)) transition(go); else go()
+  }
+
+  useLayoutEffect(() => {
+    const el = mainScroll.current; if (!el) return
+    el.scrollTop = scrollMemo.current.get(viewKey(view)) ?? 0
+  }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const labelCtx = view.kind === 'label' ? [view.labelId] : []
   const newNote = async () => openNote((await createNote({ labels: labelCtx })).id)
@@ -162,7 +175,11 @@ export default function App() {
 
   // Housekeeping once the first screen is up (storage protection, image migration, repairs, cleanup).
   useEffect(() => {
-    const run = () => import('./lib/maintenance').then((m) => m.runMaintenance()).catch((e) => console.warn('[folio] maintenance', e))
+    const run = () => {
+      import('./lib/maintenance').then((m) => m.runMaintenance()).catch((e) => console.warn('[folio] maintenance', e))
+      // Warm the editor so the first note opens instantly instead of waiting on a download.
+      setTimeout(() => { void import('./components/NoteEditor') }, 600)
+    }
     const ric = (window as unknown as { requestIdleCallback?: (f: () => void, o?: object) => number }).requestIdleCallback
     if (ric) ric(run, { timeout: 4000 }); else setTimeout(run, 1500)
   }, [])
@@ -366,17 +383,20 @@ export default function App() {
         </div>
       )}
 
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main className="relative flex min-w-0 flex-1 flex-col">
+        {/* The note opens on top; the list underneath stays put, so Back lands exactly where you were. */}
         {openId && (
-          <Suspense fallback={null}>
-            <ErrorBoundary key={openId} area="editor" onBack={closeNote}>
-              <NoteEditor id={openId} onClose={closeNote} onNavigate={openNote} focus={focus} setFocus={setFocus} />
-            </ErrorBoundary>
-          </Suspense>
+          <div className="absolute inset-0 z-10 flex flex-col">
+            <Suspense fallback={<div className="editor-veil h-full" />}>
+              <ErrorBoundary key={openId} area="editor" onBack={closeNote}>
+                <NoteEditor id={openId} initialNote={notes.find((n) => n.id === openId)} onClose={closeNote} onNavigate={openNote} focus={focus} setFocus={setFocus} />
+              </ErrorBoundary>
+            </Suspense>
+          </div>
         )}
         {/* Margins stays open behind a note you open from it, so Back returns to the same page */}
         {view.kind === 'margins' && (
-          <div className={openId ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
+          <div className={`flex min-h-0 flex-1 flex-col ${openId ? 'parked' : ''}`} inert={!!openId}>
             <ErrorBoundary area="editor" onBack={() => setView({ kind: 'notes' })}>
               <Suspense fallback={<div className="flex flex-1 items-center justify-center text-[14px] text-muted">Opening Margins…</div>}>
                 <Margins incoming={pdfIncoming} onIncomingDone={pdfDone} onOpenNote={openNote} onReading={setReading}
@@ -393,8 +413,8 @@ export default function App() {
             </ErrorBoundary>
           </div>
         )}
-        {!openId && view.kind !== 'margins' && (
-          <>
+        {view.kind !== 'margins' && (
+          <div className={`flex min-h-0 flex-1 flex-col ${openId ? 'parked' : ''}`} inert={!!openId}>
             {selected.size > 0 ? (
               <header className="animate-fade z-20 box-content flex h-14 shrink-0 items-center gap-1 border-b border-line bg-canvas px-2 pt-[env(safe-area-inset-top)]">
                 <IconButton label="Clear selection (Esc)" onClick={() => setSelected(new Set())}><X size={20} /></IconButton>
@@ -436,7 +456,7 @@ export default function App() {
                   ? <span className="pl-0.5 md:hidden"><Wordmark size={21} /></span>
                   : <span className={`large-title-sm font-title min-w-0 truncate pl-1 text-[18px] font-semibold md:hidden ${view.kind !== 'notes' && !scrolled ? 'opacity-0' : ''}`}>{view.kind === 'pages' ? 'Pages' : view.kind === 'tasks' ? 'Tasks' : view.kind === 'journal' ? 'Journal' : view.kind === 'archive' ? 'Archive' : view.kind === 'trash' ? 'Trash' : view.kind === 'label' ? labelName : 'Notes'}</span>}
 
-                <div className="absolute left-1/2 -translate-x-1/2 max-md:hidden">
+                <div className={`absolute left-1/2 -translate-x-1/2 max-lg:hidden ${sidebarShown ? 'hidden' : ''}`}>
                   <div className="flex rounded-full bg-surface p-1 text-[14px] font-medium">
                     {([['notes', 'Notes'], ['pages', 'Pages'], ['tasks', 'Tasks']] as const).map(([k, l]) => (
                       <button key={k} type="button" onClick={() => setView({ kind: k })}
@@ -488,7 +508,7 @@ export default function App() {
               </header>
             )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-28 pt-2 sm:px-6 md:pb-16" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 44)} onClick={(e) => { if (e.target === e.currentTarget && selected.size) setSelected(new Set()) }}>
+            <div ref={mainScroll} className="main-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-28 pt-2 sm:px-6 md:pb-16" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 44)} onClick={(e) => { if (e.target === e.currentTarget && selected.size) setSelected(new Set()) }}>
               {view.kind === 'pages' ? <div className="pt-4"><PagesView notes={notes} onOpen={openNote} /></div>
                 : view.kind === 'tasks' ? <div className="pt-4"><TasksView notes={notes} onOpen={openNote} /></div>
                 : view.kind === 'journal' ? <div className="pt-4"><JournalView notes={notes} onOpen={openNote} onSpeak={() => setRecording('journal')} /></div>
@@ -559,7 +579,7 @@ export default function App() {
             </div>
             {/* phones + tablet portrait: bottom tabs */}
             {selected.size === 0 && <div className="md:hidden"><BottomBar view={view} setView={setView} onCreate={() => setCreate(true)} openTasks={openTasks} /></div>}
-          </>
+          </div>
         )}
       </main>
 

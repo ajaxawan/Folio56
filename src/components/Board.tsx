@@ -27,6 +27,9 @@ interface Props {
   fanned?: Set<string>
 }
 
+// Cards rise in once, when Folio first opens — not every time you switch views or come back from a note.
+let introDone = false
+
 /** Keep-style board: measured masonry (row-first order), drag to reorder, long-press to select on touch. */
 export function Board({ groups, labels, childCount, selected, onOpen, onSelect, canDrag, stacks, onStack, fanned }: Props) {
   const [active, setActive] = useState<Note | null>(null)
@@ -36,6 +39,8 @@ export function Board({ groups, labels, childCount, selected, onOpen, onSelect, 
     useSensor(TouchSensor, { activationConstraint: { delay: 350, tolerance: 8 } }),
   )
   const all = useMemo(() => groups.flatMap((g) => g.notes), [groups])
+  const [intro] = useState(() => !introDone)
+  useEffect(() => { const t = setTimeout(() => { introDone = true }, 900); return () => clearTimeout(t) }, [])
   const selecting = selected.size > 0
 
   const onStart = (e: DragStartEvent) => {
@@ -60,7 +65,7 @@ export function Board({ groups, labels, childCount, selected, onOpen, onSelect, 
         <section key={g.key} className="mb-6">
           {g.title && <h2 className="flex items-center gap-2 px-1 pb-2 text-[11px] font-semibold uppercase tracking-[.12em] text-accent/90"><span className="h-1.5 w-1.5 rounded-full bg-accent" />{g.title}</h2>}
           <Masonry notes={g.notes} render={(n, idx) => (
-            <Cell key={n.id} id={n.id} delay={idx} disabled={!canDrag && !('ontouchstart' in window)} isOver={overId === n.id && active?.id !== n.id}>
+            <Cell key={n.id} id={n.id} delay={intro ? idx : -1} disabled={!canDrag && !('ontouchstart' in window)} isOver={overId === n.id && active?.id !== n.id}>
               <NoteCard note={n} labels={labels} childCount={childCount.get(n.id) ?? 0} selected={selected.has(n.id)} selecting={selecting}
                 onOpen={onOpen} onSelect={onSelect} dragging={active?.id === n.id} stack={stacks?.get(n.id)} onStack={stacks?.has(n.id) || (n.series && fanned?.has(n.series)) ? onStack : undefined} />
             </Cell>
@@ -138,8 +143,9 @@ function Masonry({ notes, render }: { notes: Note[]; render: (n: Note, idx: numb
 
   useLayoutEffect(() => {
     const el = ref.current; if (!el) return
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth))
-    ro.observe(el); setWidth(el.clientWidth)
+    // A parked board (behind an open note) reports 0 — keep the last real width so nothing reflows.
+    const ro = new ResizeObserver(() => { if (el.clientWidth > 0) setWidth(el.clientWidth) })
+    ro.observe(el); if (el.clientWidth > 0) setWidth(el.clientWidth)
     return () => ro.disconnect()
   }, [])
 
@@ -190,7 +196,7 @@ function Masonry({ notes, render }: { notes: Note[]; render: (n: Note, idx: numb
       <div ref={ref} className={list ? 'mx-auto max-w-2xl' : ''}>
         <div className="relative" style={{ height: layout.height }}>
           {layout.columns.map((col, ci) => col.filter((it) => it.top < win.to && it.top + it.h > win.from).map((it) => (
-            <div key={it.note.id} className="absolute" style={{ top: it.top, left: list ? 0 : ci * (cw + gap), width: list ? '100%' : cw }}>
+            <div key={it.note.id} className="absolute left-0 top-0" style={{ transform: `translate3d(${list ? 0 : ci * (cw + gap)}px, ${it.top}px, 0)`, width: list ? '100%' : cw, contain: 'layout style' }}>
               <Measure id={it.note.id} onSize={report}>{render(it.note, -1)}</Measure>
             </div>
           )))}
@@ -216,7 +222,7 @@ function Measure({ id, onSize, children }: { id: string; onSize: (id: string, h:
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = ref.current; if (!el) return
-    const ro = new ResizeObserver(() => onSize(id, el.offsetHeight))
+    const ro = new ResizeObserver(() => { if (el.offsetHeight > 0) onSize(id, el.offsetHeight) })
     ro.observe(el)
     return () => ro.disconnect()
   }, [id, onSize])

@@ -130,7 +130,7 @@ export function TasksView({ notes, onOpen }: { notes: Note[]; onOpen: (id: strin
 
       <QuickAdd list={list} onAdded={(m) => setToast({ msg: m })} />
 
-      <div className="no-scrollbar -mx-3 mb-3 flex gap-1.5 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0" role="tablist" aria-label="Task lists">
+      <div className="fade-edge no-scrollbar -mx-3 mb-3 flex gap-1.5 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0" role="tablist" aria-label="Task lists">
         {tabs.map((t) => (
           <button key={t.k} type="button" role="tab" aria-selected={list === t.k} onClick={() => { setList(t.k); setLimit(80) }}
             className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13.5px] font-medium transition-colors ${list === t.k ? 'border-transparent bg-accent text-on-accent' : 'border-line text-ink-2 hover:border-accent/50'}`}>

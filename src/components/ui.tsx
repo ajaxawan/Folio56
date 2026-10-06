@@ -9,7 +9,7 @@ export function IconButton({ label, onClick, children, active, className = '', s
   const s = size === 'sm' ? 'h-9 w-9 coarse:h-11 coarse:w-11' : size === 'lg' ? 'h-11 w-11' : 'h-10 w-10 coarse:h-11 coarse:w-11'
   return (
     <button type="button" title={label} aria-label={label} onClick={onClick} disabled={disabled}
-      className={`${s} inline-flex shrink-0 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-wash hover:text-ink disabled:opacity-40 ${active ? 'bg-wash text-ink' : ''} ${className}`}>
+      className={`${s} inline-flex shrink-0 items-center justify-center rounded-full text-ink-2 transition-[background-color,color,transform] duration-150 hover:bg-wash hover:text-ink active:scale-[.93] disabled:opacity-40 ${active ? 'bg-wash text-ink' : ''} ${className}`}>
       {children}
     </button>
   )
@@ -56,7 +56,7 @@ export function Popover({ open, onClose, children, className = '' }: { open: boo
   return (
     <div ref={ref} data-popover onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}
       style={shift ? { translate: `${shift}px 0` } : undefined}
-      className={`animate-pop absolute z-50 rounded-xl border border-line bg-pop/90 p-1.5 text-ink shadow-2xl shadow-black/40 ${className}`}>
+      className={`animate-pop absolute z-50 rounded-xl border border-line bg-pop p-1.5 text-ink shadow-2xl shadow-black/40 ${className}`}>
       {children}
     </div>
   )
@@ -84,9 +84,9 @@ export function Modal({ title, onClose, children, width = 'max-w-md' }: { title:
   return (
     <div className={`animate-fade fixed inset-0 z-[60] flex justify-center bg-scrim ${phone ? 'items-end' : 'items-center p-3'}`} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className={`w-full ${width} overflow-y-auto border-line bg-pop/95 text-ink shadow-2xl ${phone ? 'animate-sheet sheet mb-[var(--kb,0px)] max-h-[92dvh] rounded-t-3xl border-t px-4 pt-2' : 'animate-pop max-h-[90vh] rounded-2xl border p-5'}`}>
+        className={`w-full ${width} overflow-y-auto overscroll-contain border-line bg-pop text-ink shadow-2xl ${phone ? 'animate-sheet sheet mb-[var(--kb,0px)] max-h-[92dvh] rounded-t-3xl border-t px-4 pt-2' : 'animate-pop max-h-[90vh] rounded-2xl border p-5'}`}>
         {phone && <div className="sheet-grip" />}
-        <div className={`flex items-center justify-between ${phone ? 'sticky -top-2 z-10 -mx-4 mb-3 bg-pop/95 px-4 py-1 backdrop-blur' : 'mb-4'}`}>
+        <div className={`flex items-center justify-between ${phone ? 'sticky -top-2 z-10 -mx-4 mb-3 bg-pop px-4 py-1' : 'mb-4'}`}>
           <h2 id={titleId} className="text-[17px] font-semibold">{title}</h2>
           <IconButton size="sm" label="Close" onClick={onClose}><X size={18} /></IconButton>
         </div>

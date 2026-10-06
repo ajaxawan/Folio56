@@ -3,12 +3,12 @@ import {
   Maximize, Minus, MoreHorizontal, NotebookPen, PanelLeft, Plus, Search, Sparkles, TextQuote, Trash2, Type, X,
 } from 'lucide-react'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { nanoid } from 'nanoid'
 import { createNote, db } from '../lib/db'
 import { putImage } from '../lib/blobs'
 import {
-  canReopen, fileTitle, forgetRecord, getRecord, HL_COLORS, openPdf, pageToParagraphs, pdfjs, pickPdf, recentRecords, reopen, saveRecord,
+  canReopen, cleanTitle, forgetRecord, getRecord, HL_COLORS, openPdf, pageToParagraphs, pdfjs, pickPdf, recentRecords, reopen, saveRecord,
   type Highlight, type HighlightColor, type PdfRecord,
 } from '../lib/margins'
 import { usePhone } from '../lib/mobile'
@@ -61,7 +61,7 @@ export default function Margins({ incoming, onIncomingDone, onOpenNote, chrome, 
       const metaTitle = String((meta?.info as { Title?: string } | undefined)?.Title ?? '').trim()
       const old = await getRecord(fp)
       const next: PdfRecord = {
-        fp, name: file.name, title: old?.title || (metaTitle.length > 3 && metaTitle.length < 140 && !/^untitled|\.(docx?|pdf)$/i.test(metaTitle) ? metaTitle : fileTitle(file.name)),
+        fp, name: file.name, title: old?.title ? cleanTitle(old.title, file.name) : cleanTitle(metaTitle, file.name),
         size: file.size, pages: d.numPages, page: Math.min(old?.page ?? 1, d.numPages), zoom: old?.zoom ?? 'fit', noteId: old?.noteId ?? null,
         highlights: old?.highlights ?? [], openedAt: Date.now(), thumb: old?.thumb, handle: handle ?? old?.handle,
       }
@@ -79,7 +79,11 @@ export default function Margins({ incoming, onIncomingDone, onOpenNote, chrome, 
 
   useEffect(() => { if (incoming) { load(incoming.file, incoming.handle); onIncomingDone() } }, [incoming, load, onIncomingDone])
   useEffect(() => () => { void docRef.current?.loadingTask.destroy() }, [])
-  useEffect(() => { onReading?.(!!doc); return () => onReading?.(false) }, [doc, onReading])
+  useEffect(() => {
+    onReading?.(!!doc)
+    if (doc) document.documentElement.dataset.reading = '1'
+    return () => { onReading?.(false); delete document.documentElement.dataset.reading }
+  }, [doc, onReading])
 
   const open = async () => { const r = await pickPdf(); if (r) load(r.file, r.handle) }
   const resume = async (r: PdfRecord) => {
@@ -119,7 +123,7 @@ function Home({ recents, loading, onOpen, onResume, onForget, onOpenNote }: {
         <div className="flex flex-wrap items-end gap-4 pb-6 pt-4">
           <div className="min-w-0 flex-1">
             <div className="text-[11px] font-semibold uppercase tracking-[.16em] text-accent">Margins</div>
-            <h1 className="font-title mt-1 text-[38px] leading-tight tracking-tight sm:text-[46px]">Read a PDF, write beside it</h1>
+            <h1 className="font-title mt-1 text-[32px] leading-tight tracking-tight sm:text-[46px]">Read a PDF, write beside it</h1>
             <p className="mt-2 max-w-[560px] text-[15px] text-muted">Highlight, quote and snap pages straight into a note. Folio reads the file where it is and never copies it — it only remembers your page, highlights and notes.</p>
           </div>
           <button type="button" onClick={onOpen} disabled={!!loading} className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-[14px] font-semibold text-on-accent shadow-lg shadow-black/25 transition-transform active:scale-95 disabled:opacity-60">
@@ -274,9 +278,33 @@ function Reader({ doc, rec, setRec, onClose, onOpen, onOpenNote, phone }: {
   // restore the remembered page once sizes are known
   const restored = useRef(false)
   useEffect(() => { if (!restored.current && sizes[0] && rec.page > 1) { restored.current = true; requestAnimationFrame(() => goTo(rec.page, false)) } }, [sizes, rec.page, goTo])
-  // keep the same page in view when zooming
+  // Zooming keeps the same spot on the page under your eyes (no jump back to the page top).
   const lastScale = useRef(scale)
-  useEffect(() => { if (Math.abs(lastScale.current - scale) > 0.001) { lastScale.current = scale; requestAnimationFrame(() => goTo(page, false)) } }, [scale]) // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const prev = lastScale.current; if (Math.abs(prev - scale) < 0.001) return
+    lastScale.current = scale
+    const el = scroller.current; if (!el) return
+    const r = scale / prev
+    const cy = el.scrollTop + el.clientHeight / 2, cx = el.scrollLeft + el.clientWidth / 2
+    el.scrollTop = cy * r - el.clientHeight / 2; el.scrollLeft = Math.max(0, cx * r - el.clientWidth / 2)
+  }, [scale])
+  // Pinch (touch) and ctrl/⌘ + scroll or trackpad pinch (laptops) zoom the pages.
+  const scaleRef = useRef(scale); scaleRef.current = scale
+  useEffect(() => {
+    const el = scroller.current; if (!el || mode !== 'page') return
+    const clamp = (z: number) => Math.round(Math.max(0.4, Math.min(4, z)) * 100) / 100
+    let raf = 0, want = 0
+    const apply = (z: number) => { want = z; if (!raf) raf = requestAnimationFrame(() => { raf = 0; setZoom(clamp(want)) }) }
+    const onWheel = (e: WheelEvent) => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); apply((want && raf ? want : scaleRef.current) * Math.exp(-e.deltaY * 0.0022)) }
+    let d0 = 0, z0 = 1
+    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const onStart = (e: TouchEvent) => { if (e.touches.length === 2) { d0 = dist(e.touches); z0 = scaleRef.current } }
+    const onMove = (e: TouchEvent) => { if (e.touches.length === 2 && d0) { e.preventDefault(); apply(z0 * (dist(e.touches) / d0)) } }
+    const onEnd = (e: TouchEvent) => { if (e.touches.length < 2) d0 = 0 }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    el.addEventListener('touchstart', onStart, { passive: true }); el.addEventListener('touchmove', onMove, { passive: false }); el.addEventListener('touchend', onEnd)
+    return () => { cancelAnimationFrame(raf); el.removeEventListener('wheel', onWheel); el.removeEventListener('touchstart', onStart); el.removeEventListener('touchmove', onMove); el.removeEventListener('touchend', onEnd) }
+  }, [mode])
 
   // ---- remember page/zoom
   useEffect(() => {
@@ -688,20 +716,30 @@ const PageView = memo(function PageView({ n, doc, size, scale, near, highlights,
   const [box, setBox] = useState<null | { x0: number; y0: number; x1: number; y1: number }>(null)
   const w = Math.floor(size.w * scale), h = Math.floor(size.h * scale)
 
+  const drawnAt = useRef(0)
   useEffect(() => {
-    if (!near) return
+    // Far from the screen: let the browser have the memory back (big PDFs stay light).
+    if (!near) {
+      if (!drawnAt.current) return
+      const t = window.setTimeout(() => { const c = canvas.current; if (c) { c.width = 0; c.height = 0 } text.current?.replaceChildren(); drawnAt.current = 0 }, 1500)
+      return () => window.clearTimeout(t)
+    }
     let dead = false
     let task: { cancel: () => void; promise: Promise<unknown> } | null = null
+    // While zooming, wait for the pinch/ctrl-scroll to settle; the old picture stretches meanwhile.
     const t = window.setTimeout(async () => {
       try {
         const p: PDFPageProxy = await doc.getPage(n); if (dead) return
-        const dpr = Math.min(2.5, window.devicePixelRatio || 1)
-        const vp = p.getViewport({ scale: scale * dpr })
+        // Sharp on high-DPI screens, but never more than ~8 megapixels per page (keeps phones fast).
+        const base = p.getViewport({ scale })
+        const dpr = Math.min(window.devicePixelRatio || 1, 2.5, Math.sqrt(8_000_000 / Math.max(1, base.width * base.height)))
+        const vp = p.getViewport({ scale: scale * Math.max(1, dpr) })
         const c = canvas.current; if (!c) return
         const off = document.createElement('canvas'); off.width = Math.ceil(vp.width); off.height = Math.ceil(vp.height)
         task = p.render({ canvas: off, canvasContext: off.getContext('2d')!, viewport: vp })
         await task.promise; if (dead) return
-        c.width = off.width; c.height = off.height; c.getContext('2d')!.drawImage(off, 0, 0)
+        c.width = off.width; c.height = off.height; c.getContext('2d')!.drawImage(off, 0, 0); drawnAt.current = scale
+        off.width = 0; off.height = 0
         // selectable text
         const layer = text.current
         if (layer) {
@@ -713,7 +751,7 @@ const PageView = memo(function PageView({ n, doc, size, scale, near, highlights,
           setDrawn((d) => d + 1)
         }
       } catch (e) { if ((e as Error).name !== 'RenderingCancelledException') console.warn('[margins] page', n, e) }
-    }, 40)
+    }, drawnAt.current ? 140 : 30)
     return () => { dead = true; window.clearTimeout(t); task?.cancel() }
   }, [near, scale, doc, n])
 
@@ -760,7 +798,7 @@ function Thumbs({ doc, sizes, page, tint, onGo, marks }: { doc: PDFDocumentProxy
   }, [sizes.length])
   useEffect(() => { root.current?.querySelector(`[data-n="${page}"]`)?.scrollIntoView({ block: 'nearest' }) }, [page])
   return (
-    <div ref={root} className="grid grid-cols-2 gap-3 px-1 pt-1" data-tint={tint}>
+    <div ref={root} className="grid grid-cols-2 gap-3 px-1 pt-1" data-tint={tint === 'night' ? 'night' : undefined}>
       {sizes.map((s, i) => (
         <button key={i} data-n={i + 1} type="button" onClick={() => onGo(i + 1)} className="group flex flex-col items-center gap-1">
           <span className={`relative block w-full overflow-hidden rounded-[3px] bg-white ring-offset-2 ring-offset-side ${page === i + 1 ? 'ring-2 ring-accent' : 'ring-1 ring-line group-hover:ring-accent/50'}`} style={{ aspectRatio: `${s.w} / ${s.h}` }}>
