@@ -189,9 +189,34 @@ input:focus, textarea:focus { outline: none; }
   color: color-mix(in srgb, var(--color-accent) 70%, var(--color-ink)); background: color-mix(in srgb, var(--color-accent) 12%, transparent); border-radius: 5px; padding: 1px 5px; font-size: .88em; font-family: var(--font-mono);
 }
 /* tables */
-.folio-editor .bn-block-content[data-content-type="table"] table { border-radius: 10px; overflow: hidden; }
-.folio-editor .bn-block-content[data-content-type="table"] th { background: var(--color-wash); font-weight: 600; }
-.folio-editor .bn-block-content[data-content-type="table"] td, .folio-editor .bn-block-content[data-content-type="table"] th { border-color: var(--color-line) !important; }
+/* V5.7: calmer, roomier tables — whole words (no "Collectio/n" breaks), a soft header, gentle row bands,
+   one rounded outline, and sideways scrolling instead of squashing when a table is wider than the page */
+.folio-editor .bn-block-content[data-content-type="table"] { max-width: 100%; }
+.folio-editor .bn-block-content[data-content-type="table"] .tableWrapper { overflow-x: auto; padding: 2px 0 6px; max-width: 100%; }
+.folio-editor .bn-block-content[data-content-type="table"] table {
+  border-collapse: separate !important; border-spacing: 0; border: 1px solid var(--color-line); border-radius: 12px; overflow: hidden;
+  background: color-mix(in srgb, var(--color-card) 55%, transparent); margin: 2px 0; }
+.folio-editor .bn-block-content[data-content-type="table"] :is(td, th) {
+  border: 0 !important; border-bottom: 1px solid var(--color-line) !important; border-right: 1px solid color-mix(in srgb, var(--color-line) 55%, transparent) !important;
+  padding: 9px 14px !important; vertical-align: top; font-size: .93em; line-height: 1.55; overflow-wrap: normal; word-break: normal; hyphens: manual; }
+.folio-editor .bn-block-content[data-content-type="table"] tr:last-child > :is(td, th) { border-bottom: 0 !important; }
+.folio-editor .bn-block-content[data-content-type="table"] tr > :is(td, th):last-child { border-right: 0 !important; }
+.folio-editor .bn-block-content[data-content-type="table"] th {
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-wash)); color: var(--color-ink); font-weight: 600; font-size: .86em; letter-spacing: .015em; }
+.folio-editor .bn-block-content[data-content-type="table"] tr:nth-child(even) > td { background: color-mix(in srgb, var(--color-wash) 60%, transparent); }
+.folio-editor .bn-block-content[data-content-type="table"] tr:hover > td { background: var(--color-wash); }
+.folio-editor .bn-block-content[data-content-type="table"] code { white-space: nowrap; }
+.folio-editor .bn-block-content[data-content-type="table"] :is(td, th) p { margin: 0; }
+@media (max-width: 640px) {
+  .folio-editor .bn-block-content[data-content-type="table"] table { width: max-content !important; }
+  .folio-editor .bn-block-content[data-content-type="table"] :is(td, th) { padding: 7px 10px !important; font-size: .9em; min-width: 96px; max-width: 240px; }
+}
+/* images never spill past the page (snapshots, pasted screenshots) */
+.folio-editor .bn-visual-media-wrapper, .folio-editor .bn-block-content[data-content-type="image"] .bn-file-block-content-wrapper { max-width: 100%; }
+.folio-editor .bn-block-content[data-content-type="image"] img { max-width: 100%; height: auto; }
+.folio-editor .bn-file-caption { color: var(--color-muted); font-size: 12.5px; padding-top: 4px; }
+/* a touch tighter rhythm between blocks: more on the page, still airy */
+.folio-editor .bn-block-outer + .bn-block-outer .bn-block-content[data-content-type="heading"] { padding-top: .9em; }
 .folio-editor hr, .folio-editor .bn-block-content[data-content-type="divider"] hr { border-color: var(--color-line); }
 @media (max-width: 640px) { .folio-editor .bn-editor { padding-inline: 26px 4px; } }
 
@@ -295,3 +320,35 @@ article[data-note], .no-callout { -webkit-touch-callout: none; -webkit-user-sele
 /* light paper: soft accents are too pale as text — use the deeper ink of the same hue */
 [data-mode="light"] .text-accent { color: var(--color-accent-ink); }
 [data-mode="light"] .text-accent\/90 { color: var(--color-accent-ink); }
+
+/* ---------- V5.7 Margins (PDF reader) ---------- */
+.pdf-scroller { background: color-mix(in srgb, var(--color-canvas) 92%, #000); }
+[data-mode="light"] .pdf-scroller { background: color-mix(in srgb, var(--color-canvas) 90%, #5a4a30); }
+.pdf-scroller[data-tint="warm"] .pdf-canvas, [data-tint="warm"] .pdf-canvas { filter: sepia(.22) saturate(1.05) brightness(.93) contrast(.97); }
+.pdf-scroller[data-tint="night"] .pdf-canvas, [data-tint="night"] .pdf-canvas { filter: invert(.9) hue-rotate(180deg) brightness(1.05) contrast(.92) sepia(.12); }
+.pdf-scroller[data-tint="night"] .pdf-page { background: #1b1916; }
+.tint-swatch-paper { background: #fff; } .tint-swatch-warm { background: #efe2c8; } .tint-swatch-night { background: #24211d; }
+.pdf-mark { mix-blend-mode: multiply; opacity: .42; border-radius: 2px; }
+.pdf-scroller[data-tint="night"] .pdf-mark { mix-blend-mode: screen; opacity: .35; }
+.pdf-scroller.snapping .textLayer { pointer-events: none; }
+.pdf-page .textLayer { position: absolute; text-align: initial; inset: 0; overflow: clip; opacity: 1; line-height: 1; text-size-adjust: none; -webkit-text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; z-index: 2; caret-color: transparent;
+  --min-font-size: 1; --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size)); --min-font-size-inv: calc(1 / var(--min-font-size)); }
+.pdf-page .textLayer :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; user-select: text; -webkit-user-select: text; }
+.pdf-page .textLayer > :not(.markedContent), .pdf-page .textLayer .markedContent span:not(.markedContent) {
+  z-index: 1; --font-height: 0; font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1; --rotate: 0deg; transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv)); }
+.pdf-page .textLayer .markedContent { display: contents; }
+.pdf-page .textLayer span[role="img"] { user-select: none; cursor: default; }
+.pdf-page .textLayer ::selection { background: color-mix(in srgb, var(--color-accent) 45%, transparent); color: transparent; }
+.pdf-page .textLayer br::selection { background: transparent; }
+.pdf-page .textLayer .endOfContent { display: block; position: absolute; inset: 100% 0 0; z-index: 0; cursor: default; user-select: none; }
+.pdf-page .textLayer.selecting .endOfContent { top: 0; }
+.pdf-page .textLayer .pdf-hit { background: rgb(255 196 0 / .45); border-radius: 2px; }
+/* the notes beside a PDF: a little tighter */
+.note-embedded .folio-editor .bn-editor { padding-inline: 40px 14px; }
+.note-embedded textarea[aria-label="Title"] { font-size: 28px !important; }
+.note-embedded .folio-editor .bn-block-content[data-content-type="image"] img { box-shadow: 0 6px 18px -8px rgb(0 0 0 / .55); }
+/* pages widened for tables keep running text at a comfortable line length */
+.wide-tables .bn-block-content:is([data-content-type="paragraph"], [data-content-type="bulletListItem"], [data-content-type="numberedListItem"], [data-content-type="checkListItem"]) { max-width: 78ch; }
+/* light paper: links in notes use the deeper accent ink so they stay readable */
+[data-mode="light"] .folio-editor a, [data-mode="light"] .folio-editor .bn-inline-content a { color: var(--color-accent-ink); }

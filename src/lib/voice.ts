@@ -440,3 +440,10 @@ export async function saveJournalEntry(segments: Blob[], duration: number, onPro
   await updateNote(daily.id, { content })
   return daily
 }
+
+/** One-off question to the user's Groq model (Margins: explain a passage, summarise a page, tidy text). */
+export async function askAI(system: string, user: string, maxTokens = 900, onWait?: (s: number) => void): Promise<string> {
+  const s = await getVoiceSettings()
+  if (!s.key) throw new GroqError('Add your free Groq key in Settings → Voice & AI to use this.')
+  return chat([{ role: 'system', content: system }, { role: 'user', content: user }], s, maxTokens, onWait)
+}

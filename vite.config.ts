@@ -23,7 +23,10 @@ export default defineConfig({
         // Android (installed app): Folio appears in the share sheet, so a Folio link shared from WhatsApp etc. opens here.
         share_target: { action: '/', method: 'GET', params: { title: 'title', text: 'text', url: 'url' } },
         // Long-press the installed icon (Android, Windows, macOS Chrome/Edge) for quick capture.
+        // V5.7: installed Folio can be the "Open with" app for PDFs (Margins)
+        file_handlers: [{ action: '/', accept: { 'application/pdf': ['.pdf'] } }],
         shortcuts: [
+          { name: 'Read a PDF', short_name: 'Margins', url: '/?view=margins', icons: [{ src: 'pwa-192.png', sizes: '192x192' }] },
           { name: 'Voice memo', short_name: 'Record', url: '/?record=memo', icons: [{ src: 'pwa-192.png', sizes: '192x192' }] },
           { name: 'New note', short_name: 'Note', url: '/?new=', icons: [{ src: 'pwa-192.png', sizes: '192x192' }] },
           { name: 'Add a task', short_name: 'Task', url: '/?view=tasks&add=1', icons: [{ src: 'pwa-192.png', sizes: '192x192' }] },
@@ -37,7 +40,7 @@ export default defineConfig({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,mjs,css,html,svg,png,woff2}'],
         // Keep the install small: rarely used code-colouring languages and non-latin font files are
         // fetched the first time they're needed (then cached for offline use) instead of up front.
         globIgnores: [

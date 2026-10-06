@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
-  Archive, ArchiveRestore, ArrowDownUp, BookOpen, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon,
+  Archive, ArchiveRestore, ArrowDownUp, BookOpen, BookOpenText, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon,
   Layers, Link2, Mic, PanelLeftOpen, Palette, Pin, RotateCcw, Search, Send, Settings as SettingsIcon, SquarePen, Sun, Tag, Trash2, X,
 } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -44,6 +44,7 @@ const ParcelHost = lazy(() => import('./components/ParcelDialogs').then((m) => (
 const NoteEditor = lazy(() => import('./components/NoteEditor').then((m) => ({ default: m.NoteEditor })))
 const CreateSheet = lazy(() => import('./components/CreateSheet').then((m) => ({ default: m.CreateSheet })))
 const SeriesSheet = lazy(() => import('./components/SeriesSheet').then((m) => ({ default: m.SeriesSheet })))
+const Margins = lazy(() => import('./components/Margins'))
 const VoiceRecorder = lazy(() => import('./components/VoiceRecorder').then((m) => ({ default: m.VoiceRecorder })))
 
 /** Run a state change inside a View Transition when the browser supports it (card ⇄ page morph). */
@@ -99,6 +100,10 @@ export default function App() {
   const [hintTick, setHintTick] = useState(0)
   const toggleStack = useCallback((series: string) => setExpanded((e) => { const n = new Set(e); if (n.has(series)) n.delete(series); else n.add(series); return n }), [])
   const [recording, setRecording] = useState<false | 'memo' | 'journal'>(false)
+  const [pdfIncoming, setPdfIncoming] = useState<null | { file: File; handle?: FileSystemFileHandle }>(null)
+  const pdfDone = useCallback(() => setPdfIncoming(null), [])
+  const [reading, setReading] = useState(false)
+  const openPdfFile = useCallback((p: { file: File; handle?: FileSystemFileHandle }) => { setPdfIncoming(p); setViewRaw({ kind: 'margins' }); setDrawer(false) }, [])
   const [scrolled, setScrolled] = useState(false)
   const phone = usePhone()
 
@@ -138,7 +143,7 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette((p) => !p); return }
       if (isTyping() || palette || settings || templates || recording || create) return
       if (e.key === 'Escape' && selected.size) setSelected(new Set())
-      if (!openId && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (!openId && view.kind !== 'margins' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         if (e.key === 'c' || e.key === 'n') { e.preventDefault(); newNote() }
         if (e.key === 't') { e.preventDefault(); today() }
         if (e.key === 'v') { e.preventDefault(); setRecording('memo') }
@@ -198,7 +203,7 @@ export default function App() {
         else if (has('today')) today()
         else if (has('view')) {
           const v = q.get('view')
-          if (v === 'tasks' || v === 'pages' || v === 'journal') setViewRaw({ kind: v })
+          if (v === 'tasks' || v === 'pages' || v === 'journal' || v === 'margins') setViewRaw({ kind: v })
           if (q.get('add')) setTimeout(() => document.querySelector<HTMLInputElement>('input[aria-label="Add a task"]')?.focus(), 400)
         }
       })()
@@ -212,6 +217,12 @@ export default function App() {
     return () => window.removeEventListener('hashchange', fromAddress)
   }, [])
 
+  // ---- "Open with → Folio" for PDFs (installed app on Windows / ChromeOS / Android Chrome) ----
+  useEffect(() => {
+    const lq = (window as unknown as { launchQueue?: { setConsumer: (f: (p: { files?: FileSystemFileHandle[] }) => void) => void } }).launchQueue
+    lq?.setConsumer(async (p) => { const h = p.files?.[0]; if (h) openPdfFile({ file: await h.getFile(), handle: h }) })
+  }, [openPdfFile])
+
   // ---- drop .md files anywhere to import ----
   useEffect(() => {
     let depth = 0
@@ -223,11 +234,13 @@ export default function App() {
       if (openId || !hasFiles(e) || document.querySelector('[role=dialog][aria-label="Import Markdown"]')) return
       e.preventDefault()
       const files = [...(e.dataTransfer?.files ?? [])]
-      if (files.some((f) => /\.(md|markdown|txt)$/i.test(f.name))) setImporting(files)
+      const pdf = files.find((f) => /\.pdf$/i.test(f.name) || f.type === 'application/pdf')
+      if (pdf) openPdfFile({ file: pdf })
+      else if (files.some((f) => /\.(md|markdown|txt)$/i.test(f.name))) setImporting(files)
     }
     window.addEventListener('dragover', over); window.addEventListener('dragenter', enter); window.addEventListener('dragleave', leave); window.addEventListener('drop', drop)
     return () => { window.removeEventListener('dragover', over); window.removeEventListener('dragenter', enter); window.removeEventListener('dragleave', leave); window.removeEventListener('drop', drop) }
-  }, [openId])
+  }, [openId, openPdfFile])
 
   // ---- derived data ----
   const childCount = useMemo(() => {
@@ -309,6 +322,8 @@ export default function App() {
     { id: 'go-notes', label: 'Go to Notes', icon: <Lightbulb size={16} />, run: () => setView({ kind: 'notes' }) },
     { id: 'go-pages', label: 'Go to Pages', icon: <FileText size={16} />, run: () => setView({ kind: 'pages' }) },
     { id: 'go-journal', label: 'Go to Journal', icon: <BookOpen size={16} />, keywords: 'daily calendar diary', run: () => setView({ kind: 'journal' }) },
+    { id: 'margins-open', label: 'Open a PDF in Margins…', icon: <BookOpenText size={16} />, keywords: 'pdf read reader book paper document margins', run: async () => { const { pickPdf } = await import('./lib/margins'); const r = await pickPdf(); if (r) openPdfFile(r) } },
+    { id: 'go-margins', label: 'Go to Margins (PDF reader)', icon: <BookOpenText size={16} />, keywords: 'pdf read reader', run: () => setView({ kind: 'margins' }) },
     { id: 'go-tasks', label: 'Go to Tasks', icon: <CheckSquare size={16} />, keywords: 'todo checklist', run: () => setView({ kind: 'tasks' }) },
     { id: 'go-archive', label: 'Go to Archive', icon: <Archive size={16} />, run: () => setView({ kind: 'archive' }) },
     { id: 'go-trash', label: 'Go to Trash', icon: <Trash2 size={16} />, run: () => setView({ kind: 'trash' }) },
@@ -331,7 +346,7 @@ export default function App() {
       onNew={() => { setDrawer(false); newNote() }} onToday={() => { setDrawer(false); today() }} onSearch={() => { setPalette(true); setDrawer(false) }} onOpen={openNote}
       onSettings={() => { setSettings(true); setDrawer(false) }} onCollapse={() => (mobile ? setDrawer(false) : setSidebar(false))} />
   )
-  const sidebarShown = sidebar && !focus
+  const sidebarShown = sidebar && !focus && !(reading && view.kind === 'margins' && !openId)
   const inNotesArea = !['pages', 'tasks', 'journal'].includes(view.kind)
   const emptyText = { archive: 'Archived notes rest here', trash: 'Trash is empty', label: 'No notes with this label yet', notes: '' } as Record<string, string>
 
@@ -340,7 +355,7 @@ export default function App() {
       {/* laptop: full sidebar */}
       {sidebarShown && <div className="hidden h-full shrink-0 border-r border-line/60 lg:block">{sidebarEl()}</div>}
       {/* tablet landscape: icon rail */}
-      {!focus && (
+      {!focus && !(reading && view.kind === 'margins' && !openId) && (
         <div className="hidden h-full md:block lg:hidden">
           <Rail view={view} setView={setView} openTasks={openTasks} onNew={newNote} onToday={today} onSearch={() => setPalette(true)} onSettings={() => setSettings(true)} onExpand={() => setDrawer(true)} />
         </div>
@@ -352,13 +367,33 @@ export default function App() {
       )}
 
       <main className="flex min-w-0 flex-1 flex-col">
-        {openId ? (
+        {openId && (
           <Suspense fallback={null}>
             <ErrorBoundary key={openId} area="editor" onBack={closeNote}>
               <NoteEditor id={openId} onClose={closeNote} onNavigate={openNote} focus={focus} setFocus={setFocus} />
             </ErrorBoundary>
           </Suspense>
-        ) : (
+        )}
+        {/* Margins stays open behind a note you open from it, so Back returns to the same page */}
+        {view.kind === 'margins' && (
+          <div className={openId ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
+            <ErrorBoundary area="editor" onBack={() => setView({ kind: 'notes' })}>
+              <Suspense fallback={<div className="flex flex-1 items-center justify-center text-[14px] text-muted">Opening Margins…</div>}>
+                <Margins incoming={pdfIncoming} onIncomingDone={pdfDone} onOpenNote={openNote} onReading={setReading}
+                  chrome={{
+                    top: (
+                      <header className="relative z-20 box-content flex h-14 shrink-0 items-center gap-1 px-2 pt-[env(safe-area-inset-top)] md:hidden">
+                        <IconButton label="Menu" onClick={() => setDrawer(true)}><Menu size={21} /></IconButton>
+                        <span className="pl-0.5"><Wordmark size={21} /></span>
+                      </header>
+                    ),
+                    bottom: <div className="md:hidden"><BottomBar view={view} setView={setView} onCreate={() => setCreate(true)} openTasks={openTasks} /></div>,
+                  }} />
+              </Suspense>
+            </ErrorBoundary>
+          </div>
+        )}
+        {!openId && view.kind !== 'margins' && (
           <>
             {selected.size > 0 ? (
               <header className="animate-fade z-20 box-content flex h-14 shrink-0 items-center gap-1 border-b border-line bg-canvas px-2 pt-[env(safe-area-inset-top)]">
@@ -533,7 +568,7 @@ export default function App() {
       <Atmosphere />
       {dropHint && !openId && !importing && (
         <div className="animate-fade pointer-events-none fixed inset-3 z-[70] flex items-center justify-center rounded-3xl border-2 border-dashed border-accent bg-[color-mix(in_srgb,var(--color-canvas)_80%,transparent)] backdrop-blur-sm">
-          <div className="text-center"><FileUp size={40} className="mx-auto mb-3 text-accent" /><p className="font-title text-[24px] font-semibold">Drop Markdown to import</p><p className="text-[14px] text-muted">.md files or a whole folder</p></div>
+          <div className="text-center"><FileUp size={40} className="mx-auto mb-3 text-accent" /><p className="font-title text-[24px] font-semibold">Drop to open or import</p><p className="text-[14px] text-muted">A PDF opens in Margins · .md files are imported as notes</p></div>
         </div>
       )}
       <Suspense fallback={null}>

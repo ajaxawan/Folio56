@@ -56,8 +56,17 @@ const makeTheme = (dark = true): Theme => ({
 
 type Ask = null | { mode: 'set' | 'enter'; then: (p: string) => void }
 
-export function NoteEditor({ id, onClose, onNavigate, focus, setFocus }: {
+/** What a host (Margins) can do with an embedded editor. */
+export interface EditorApi {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  append: (blocks: any[]) => void
+  markdown: () => Promise<string>
+}
+
+export function NoteEditor({ id, onClose, onNavigate, focus, setFocus, embedded, onReady }: {
   id: string; onClose: () => void; onNavigate: (id: string) => void; focus: boolean; setFocus: (v: boolean) => void
+  /** Shown beside something else (the PDF in Margins): compact header, full width, Esc left to the host. */
+  embedded?: boolean; onReady?: (api: EditorApi | null) => void
 }) {
   const note = useLiveQuery(() => db.notes.get(id), [id])
   const [content, setContent] = useState<unknown[] | null>(null)
@@ -84,7 +93,7 @@ export function NoteEditor({ id, onClose, onNavigate, focus, setFocus }: {
   return (
     <>
       {initial ? (
-        <EditorPage key={`${note.id}:${note.locked}:${note.memo?.v ?? 0}`} note={note} initial={initial} onClose={onClose} onNavigate={onNavigate} focus={focus} setFocus={setFocus} setAsk={setAsk} />
+        <EditorPage key={`${note.id}:${note.locked}:${note.memo?.v ?? 0}`} note={note} initial={initial} onClose={onClose} onNavigate={onNavigate} focus={focus} setFocus={setFocus} setAsk={setAsk} embedded={embedded} onReady={onReady} />
       ) : (
         <div className="flex h-full flex-col items-center justify-center gap-4 text-muted">
           <Lock size={36} />
@@ -101,8 +110,9 @@ export function NoteEditor({ id, onClose, onNavigate, focus, setFocus }: {
   )
 }
 
-function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAsk }: {
+function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAsk, embedded, onReady }: {
   note: Note; initial: unknown[]; onClose: () => void; onNavigate: (id: string) => void; focus: boolean; setFocus: (v: boolean) => void; setAsk: (a: Ask) => void
+  embedded?: boolean; onReady?: (api: EditorApi | null) => void
 }) {
   const { prefs, set, dark } = usePrefs()
   const [title, setTitle] = useState(note.title)
@@ -178,6 +188,30 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
     timer.current = window.setTimeout(() => { persist(); setStats(derive(editor.document).words) }, 450)
   }
 
+  // Leaving the page (or closing the Margins notes panel) never drops the last keystrokes.
+  const persistRef = useRef(persist)
+  persistRef.current = persist
+  useEffect(() => () => { if (timer.current) { window.clearTimeout(timer.current); void persistRef.current() } }, [])
+
+  // Let a host add blocks (quotes, page snapshots…) to the end of this page.
+  useEffect(() => {
+    if (!onReady) return
+    onReady({
+      append: (blocks) => {
+        const doc = editor.document
+        const last = doc[doc.length - 1]
+        const lastEmpty = last && last.type === 'paragraph' && !(Array.isArray(last.content) && last.content.length)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (doc.length === 1 && lastEmpty) editor.replaceBlocks([last], blocks as any)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        else editor.insertBlocks(blocks as any, lastEmpty && doc.length > 1 ? doc[doc.length - 2] : last, 'after')
+        requestAnimationFrame(() => { const r = scroller.current; if (r) r.scrollTo({ top: r.scrollHeight, behavior: 'smooth' }) })
+      },
+      markdown: () => getMd(true),
+    })
+    return () => onReady(null)
+  }, [editor, onReady, getMd])
+
   // periodic snapshot while writing
   useEffect(() => {
     const t = window.setInterval(async () => {
@@ -202,7 +236,7 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
   // keyboard: Esc leaves focus mode, then closes; Ctrl+Shift+F focus; Ctrl+S save version
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !document.querySelector('.bn-suggestion-menu, [data-popover], [role="dialog"]')) { if (focus) setFocus(false); else close() }
+      if (e.key === 'Escape' && !embedded && !document.querySelector('.bn-suggestion-menu, [data-popover], [role="dialog"]')) { if (focus) setFocus(false); else close() }
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); setFocus(!focus) }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); persist().then(async () => { const f = await db.notes.get(note.id); if (f) snapshot(f) }) }
     }
@@ -237,7 +271,9 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
   const s = surface(note.color, dark, prefs.cardStyle)
   const tint = note.color === 'default' ? 'transparent' : prefs.cardStyle === 'vivid' ? swatch(note.color, dark) : s.background
   const cover = useCoverCss(note.cover)
-  const maxW = prefs.width === 'wide' ? 'max-w-[1040px]' : 'max-w-[760px]'
+  // Pages with tables get a wider column automatically, so tables have room to breathe.
+  const hasTable = useMemo(() => (initial as { type?: string }[]).some((b) => b?.type === 'table'), [initial])
+  const maxW = embedded ? 'max-w-none' : prefs.width === 'wide' ? 'max-w-[1180px]' : hasTable ? 'max-w-[1000px]' : 'max-w-[820px]'
   const size = prefs.textSize === 'sm' ? '15px' : prefs.textSize === 'lg' ? '18px' : '16.5px'
   const readMin = Math.max(1, Math.round(stats / 220))
 
@@ -265,11 +301,11 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
   }
 
   return (
-    <div className="editor-veil flex h-full min-w-0" style={{ viewTransitionName: `note-${note.id}` } as React.CSSProperties}>
+    <div className={`editor-veil flex h-full min-w-0 ${embedded ? 'note-embedded' : ''}`} style={embedded ? undefined : { viewTransitionName: `note-${note.id}` } as React.CSSProperties}>
       <div className="relative flex min-w-0 flex-1 flex-col" style={{ background: `linear-gradient(to bottom, ${tint === 'transparent' ? 'color-mix(in srgb, var(--color-accent) 9%, transparent)' : `color-mix(in srgb, ${tint} 55%, transparent)`}, transparent 320px)` }}>
         {/* header */}
         <header className={`z-20 box-content flex h-12 shrink-0 items-center gap-1 px-2 pt-[env(safe-area-inset-top)] transition-opacity max-sm:h-13 duration-500 ${focus ? 'opacity-0 hover:opacity-100 focus-within:opacity-100' : calm ? 'opacity-20 hover:opacity-100' : ''}`}>
-          <IconButton label="Back (Esc)" onClick={close}><ArrowLeft size={19} /></IconButton>
+          {!embedded && <IconButton label="Back (Esc)" onClick={close}><ArrowLeft size={19} /></IconButton>}
           <nav className="no-scrollbar flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto text-[13px] text-muted">
             {crumbs.map((c) => (
               <span key={c.id} className="flex shrink-0 items-center gap-0.5">
@@ -305,9 +341,9 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
               <Switch label="Word count" checked={prefs.showCounts} onChange={(v) => set({ showCounts: v })} />
             </Popover>
           </div>
-          <IconButton label={focus ? 'Exit focus (Ctrl+Shift+F)' : 'Focus mode (Ctrl+Shift+F)'} active={focus} onClick={() => setFocus(!focus)} className="max-sm:hidden">
+          {!embedded && <IconButton label={focus ? 'Exit focus (Ctrl+Shift+F)' : 'Focus mode (Ctrl+Shift+F)'} active={focus} onClick={() => setFocus(!focus)} className="max-sm:hidden">
             {focus ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-          </IconButton>
+          </IconButton>}
           <IconButton label="Version history" active={history} onClick={() => setHistory(!history)} className="max-sm:hidden"><History size={18} /></IconButton>
           <IconButton label={note.pinned ? 'Unpin' : 'Pin'} active={note.pinned} onClick={() => patchNote(note.id, { pinned: !note.pinned })} className="max-sm:hidden">
             <Pin size={18} className={note.pinned ? 'fill-current' : ''} />
@@ -342,7 +378,7 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
 
         {focus && activeBlock && <style>{`.focus-dim .bn-block-outer[data-id="${activeBlock}"], .focus-dim .bn-block-outer:has(.bn-block-outer[data-id="${activeBlock}"]) { opacity: 1 !important; } .focus-dim .bn-block-outer[data-id="${activeBlock}"] .bn-block-outer { opacity: 1; }`}</style>}
         {/* writing surface */}
-        <div ref={scroller} className={`folio-editor min-h-0 flex-1 overflow-y-auto ${focus ? 'focus-dim' : ''} ${note.paper && note.paper !== 'none' ? `paper-${note.paper}` : ''}`} data-font={prefs.font} style={{ ['--ed-size' as string]: size }}>
+        <div ref={scroller} className={`folio-editor min-h-0 flex-1 overflow-y-auto ${hasTable && !embedded && prefs.width !== 'wide' ? 'wide-tables' : ''} ${focus ? 'focus-dim' : ''} ${note.paper && note.paper !== 'none' ? `paper-${note.paper}` : ''}`} data-font={prefs.font} style={{ ['--ed-size' as string]: size }}>
           {cover && (
             <div className="group/cover relative h-40 w-full sm:h-56" style={{ background: cover }}>
               <div className="absolute bottom-3 right-3 flex gap-1.5 opacity-0 transition-opacity group-hover/cover:opacity-100 coarse:opacity-100">

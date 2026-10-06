@@ -1,4 +1,4 @@
-import { Archive, BookOpen, CheckSquare, FileText, Lightbulb, Lock, MoreHorizontal, PanelLeftClose, Plus, Search, Settings, SquarePen, Sun, Trash2, X } from 'lucide-react'
+import { Archive, BookOpen, BookOpenText, CheckSquare, FileText, Lightbulb, Lock, MoreHorizontal, PanelLeftClose, Plus, Search, Settings, SquarePen, Sun, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import { createLabel } from '../lib/db'
 import { LabelMenu, labelColor } from './LabelMenu'
@@ -54,6 +54,7 @@ export function Sidebar({ view, setView, labels, labelCounts, recents, openTasks
         <Item icon={<Lightbulb size={18} />} active={is('notes')} onClick={() => setView({ kind: 'notes' })}>Notes</Item>
         <Item icon={<FileText size={18} />} active={is('pages')} onClick={() => setView({ kind: 'pages' })}>Pages</Item>
         <Item icon={<BookOpen size={18} />} active={is('journal')} onClick={() => setView({ kind: 'journal' })}>Journal</Item>
+        <Item icon={<BookOpenText size={18} />} active={is('margins')} onClick={() => setView({ kind: 'margins' })}>Margins</Item>
         <Item icon={<CheckSquare size={18} />} active={is('tasks')} onClick={() => setView({ kind: 'tasks' })} count={openTasks}>Tasks</Item>
         <Item icon={<Archive size={18} />} active={is('archive')} onClick={() => setView({ kind: 'archive' })}>Archive</Item>
         <Item icon={<Trash2 size={18} />} active={is('trash')} onClick={() => setView({ kind: 'trash' })}>Trash</Item>

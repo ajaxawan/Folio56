@@ -91,6 +91,7 @@ export type View =
   | { kind: 'pages' }
   | { kind: 'tasks' }
   | { kind: 'journal' }
+  | { kind: 'margins' }
   | { kind: 'archive' }
   | { kind: 'trash' }
   | { kind: 'label'; labelId: string }

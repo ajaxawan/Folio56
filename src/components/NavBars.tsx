@@ -1,4 +1,4 @@
-import { Archive, BookOpen, CheckSquare, FileText, Lightbulb, Menu, Plus, Search, Settings, SquarePen, Sun, Trash2 } from 'lucide-react'
+import { Archive, BookOpen, BookOpenText, CheckSquare, FileText, Lightbulb, Menu, Plus, Search, Settings, SquarePen, Sun, Trash2 } from 'lucide-react'
 import type { View } from '../types'
 
 type Go = (v: View) => void
@@ -33,9 +33,10 @@ export function Rail({ view, setView, onNew, onToday, onSearch, onSettings, onEx
       <Btn label="Today" onClick={onToday}><Sun size={21} /></Btn>
       <Btn label="Search" onClick={onSearch}><Search size={21} /></Btn>
       <div className="my-1 h-px w-8 bg-line" />
-      <Btn label="Notes" active={!['pages', 'tasks', 'archive', 'trash', 'journal'].includes(view.kind)} onClick={() => setView({ kind: 'notes' })}><Lightbulb size={21} /></Btn>
+      <Btn label="Notes" active={!['pages', 'tasks', 'archive', 'trash', 'journal', 'margins'].includes(view.kind)} onClick={() => setView({ kind: 'notes' })}><Lightbulb size={21} /></Btn>
       <Btn label="Pages" active={view.kind === 'pages'} onClick={() => setView({ kind: 'pages' })}><FileText size={21} /></Btn>
       <Btn label="Journal" active={view.kind === 'journal'} onClick={() => setView({ kind: 'journal' })}><BookOpen size={21} /></Btn>
+      <Btn label="Margins — read a PDF" active={view.kind === 'margins'} onClick={() => setView({ kind: 'margins' })}><BookOpenText size={21} /></Btn>
       <Btn label="Tasks" active={view.kind === 'tasks'} onClick={() => setView({ kind: 'tasks' })} badge={openTasks}><CheckSquare size={21} /></Btn>
       <Btn label="Archive" active={view.kind === 'archive'} onClick={() => setView({ kind: 'archive' })}><Archive size={21} /></Btn>
       <Btn label="Trash" active={view.kind === 'trash'} onClick={() => setView({ kind: 'trash' })}><Trash2 size={21} /></Btn>
@@ -49,7 +50,7 @@ export function Rail({ view, setView, onNew, onToday, onSearch, onSettings, onEx
 export function BottomBar({ view, setView, onCreate, openTasks }: { view: View; setView: Go; onCreate: () => void; openTasks: number }) {
   return (
     <nav className="hide-on-kb z-30 flex shrink-0 items-stretch border-t border-line/70 bg-side/90 px-1 pb-[max(env(safe-area-inset-bottom),6px)] backdrop-blur-xl">
-      <Tab label="Notes" active={!['pages', 'tasks', 'archive', 'trash', 'journal'].includes(view.kind)} onClick={() => setView({ kind: 'notes' })}><Lightbulb size={21} /></Tab>
+      <Tab label="Notes" active={!['pages', 'tasks', 'archive', 'trash', 'journal', 'margins'].includes(view.kind)} onClick={() => setView({ kind: 'notes' })}><Lightbulb size={21} /></Tab>
       <Tab label="Pages" active={view.kind === 'pages'} onClick={() => setView({ kind: 'pages' })}><FileText size={21} /></Tab>
       <div className="flex flex-1 items-center justify-center">
         <button type="button" aria-label="Create" onClick={onCreate} className="-mt-6 flex h-[58px] w-[58px] items-center justify-center rounded-[20px] bg-accent text-on-accent shadow-xl shadow-black/50 ring-4 ring-canvas transition-transform active:scale-90"><Plus size={28} strokeWidth={2.4} /></button>
