@@ -12,8 +12,8 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Folio',
-        short_name: 'Folio',
+        name: 'Folio56',
+        short_name: 'Folio56',
         description: 'Private, offline notes. Keep outside, Notion inside.',
         theme_color: '#141416',
         background_color: '#141416',

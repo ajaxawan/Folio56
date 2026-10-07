@@ -122,7 +122,7 @@ function SendDialog({ ids }: { ids: string[] | 'all' }) {
               </p>
               <div className="flex gap-2">
                 <button type="button" className={primary} disabled={tooLong} onClick={() => copy(link.url, 'link')}>{copied === 'link' ? <Check size={16} /> : <Copy size={16} />} {copied === 'link' ? 'Copied' : 'Copy link'}</button>
-                {!!navigator.share && <button type="button" className={secondary} disabled={tooLong} onClick={() => navigator.share({ url: link.url, title: 'Folio' }).catch(() => {})}><Share2 size={16} /> Share…</button>}
+                {!!navigator.share && <button type="button" className={secondary} disabled={tooLong} onClick={() => navigator.share({ url: link.url, title: 'Folio56' }).catch(() => {})}><Share2 size={16} /> Share…</button>}
               </div>
             </div>
           ) : <p className="text-[13px] text-muted">Packing…</p>}
