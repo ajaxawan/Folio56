@@ -26,7 +26,7 @@ const results = []; const ok = (n, p, i = '') => { results.push({ n, p: !!p }); 
   {
     const { ctx, p } = await run({});
     ok('no progress ring, streak or writing grid on home', !(await p.getByText(/day streak|Writing days/).count()) && !(await p.locator('section[aria-label="Today"] svg circle').count()));
-    await p.getByText('This device').first().click(); await p.waitForTimeout(400);
+    await p.getByRole('complementary').getByRole('button', { name: /^Settings/ }).click(); await p.waitForTimeout(400);
     await p.getByRole('dialog').getByRole('button', { name: 'Light', exact: true }).click(); await p.waitForTimeout(300);
     ok('Settings → Light switches instantly', await p.evaluate(() => document.documentElement.dataset.mode === 'light'));
     await p.keyboard.press('Escape'); await p.waitForTimeout(300);

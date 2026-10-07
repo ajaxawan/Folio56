@@ -104,6 +104,60 @@
   --color-highlight: rgb(255 255 255 / 0.8); --color-pattern: rgb(30 45 70 / 0.08);
   --color-on-accent: #10141a; --color-danger: #b42318; --color-star: #a16207; --color-warn: #a15c07; --color-success: #19734d;
 }
+
+/* ---------- V5.9 themes ---------- */
+/* Graphite: pure neutral grey, no tint */
+[data-theme="graphite"] {
+  --color-canvas: #161617; --color-side: #121213; --color-surface: #1f1f20; --color-card: #1c1c1d; --color-raised: #29292b;
+  --color-pop: #222224; --color-line: #343436; --color-ink: #ebebeb; --color-ink-2: #d3d3d3; --color-muted: #a0a0a0; --color-faint: #8e8e8e;
+  --color-wash: rgb(255 255 255 / 0.065); --color-wash-2: rgb(255 255 255 / 0.12); --color-highlight: rgb(255 255 255 / 0.05); --color-pattern: rgb(255 255 255 / 0.07);
+}
+/* Ember: deep brown-black with amber; the least blue light, for night writing */
+[data-theme="ember"] {
+  --color-canvas: #17110d; --color-side: #130e0a; --color-surface: #231a14; --color-card: #1f1711; --color-raised: #2d2219;
+  --color-pop: #271d16; --color-line: #3b2d22; --color-ink: #f0e2d2; --color-ink-2: #ddcab4; --color-muted: #b09781; --color-faint: #9f8670;
+  --color-wash: rgb(255 200 150 / 0.07); --color-wash-2: rgb(255 200 150 / 0.13); --color-highlight: rgb(255 210 170 / 0.06); --color-pattern: rgb(255 200 150 / 0.08);
+}
+/* Tide: deep teal-navy */
+[data-theme="tide"] {
+  --color-canvas: #0f1a1d; --color-side: #0c1518; --color-surface: #172529; --color-card: #142124; --color-raised: #1f3135;
+  --color-pop: #1a2a2e; --color-line: #29393e; --color-ink: #e2eef0; --color-ink-2: #c9dadd; --color-muted: #94abaf; --color-faint: #839a9e;
+  --color-wash: rgb(190 235 240 / 0.065); --color-wash-2: rgb(190 235 240 / 0.12); --color-highlight: rgb(200 240 245 / 0.05); --color-pattern: rgb(190 235 240 / 0.08);
+}
+/* Plum: dark aubergine */
+[data-theme="plum"] {
+  --color-canvas: #1a1320; --color-side: #160f1b; --color-surface: #241b2c; --color-card: #201827; --color-raised: #2e2338;
+  --color-pop: #281e31; --color-line: #3a2d46; --color-ink: #ece2f2; --color-ink-2: #d7cadf; --color-muted: #a898b4; --color-faint: #9786a3;
+  --color-wash: rgb(235 215 250 / 0.07); --color-wash-2: rgb(235 215 250 / 0.13); --color-highlight: rgb(235 215 250 / 0.055); --color-pattern: rgb(235 215 250 / 0.08);
+}
+[data-theme="linen"] {
+  --color-canvas: #f3ede2; --color-side: #ece5d8; --color-surface: #f8f3ea; --color-card: #faf6ef; --color-raised: #fffcf6;
+  --color-pop: #f9f4ec; --color-line: #ddd3c2; --color-ink: #2d2720; --color-ink-2: #463e34; --color-muted: #62574a; --color-faint: #6a5f51;
+  --color-wash: rgb(80 60 30 / 0.06); --color-wash-2: rgb(80 60 30 / 0.11); --color-scrim: rgb(45 35 20 / 0.32);
+  --color-highlight: rgb(255 255 255 / 0.75); --color-pattern: rgb(80 60 30 / 0.09);
+  --color-on-accent: #16140f; --color-danger: #b42318; --color-star: #b7791f; --color-warn: #a15c07; --color-success: #1d7a52;
+}
+[data-theme="sage"] {
+  --color-canvas: #eaeee6; --color-side: #e2e8dd; --color-surface: #f1f4ee; --color-card: #f5f7f2; --color-raised: #fbfcf9;
+  --color-pop: #f3f6f0; --color-line: #cfd8c9; --color-ink: #232a22; --color-ink-2: #3a4438; --color-muted: #535e4c; --color-faint: #5b6654;
+  --color-wash: rgb(40 60 30 / 0.06); --color-wash-2: rgb(40 60 30 / 0.11); --color-scrim: rgb(25 35 20 / 0.32);
+  --color-highlight: rgb(255 255 255 / 0.75); --color-pattern: rgb(40 60 30 / 0.08);
+  --color-on-accent: #121610; --color-danger: #b42318; --color-star: #9a6514; --color-warn: #9a5506; --color-success: #1d7a52;
+}
+[data-theme="blush"] {
+  --color-canvas: #f4ebe8; --color-side: #eee2de; --color-surface: #f8f1ee; --color-card: #faf5f3; --color-raised: #fffbfa;
+  --color-pop: #f9f2f0; --color-line: #e0cfca; --color-ink: #2e2524; --color-ink-2: #483b39; --color-muted: #675450; --color-faint: #6f5b57;
+  --color-wash: rgb(90 40 30 / 0.055); --color-wash-2: rgb(90 40 30 / 0.1); --color-scrim: rgb(45 25 20 / 0.32);
+  --color-highlight: rgb(255 255 255 / 0.75); --color-pattern: rgb(90 40 30 / 0.08);
+  --color-on-accent: #17110f; --color-danger: #b42318; --color-star: #a6681a; --color-warn: #a15c07; --color-success: #1d7a52;
+}
+[data-theme="fog"] {
+  --color-canvas: #ececec; --color-side: #e5e5e5; --color-surface: #f3f3f3; --color-card: #f6f6f6; --color-raised: #fcfcfc;
+  --color-pop: #f4f4f4; --color-line: #d5d5d5; --color-ink: #242424; --color-ink-2: #3c3c3c; --color-muted: #595959; --color-faint: #616161;
+  --color-wash: rgb(0 0 0 / 0.055); --color-wash-2: rgb(0 0 0 / 0.1); --color-scrim: rgb(20 20 20 / 0.32);
+  --color-highlight: rgb(255 255 255 / 0.8); --color-pattern: rgb(0 0 0 / 0.07);
+  --color-on-accent: #111111; --color-danger: #b42318; --color-star: #9a6514; --color-warn: #9a5506; --color-success: #19734d;
+}
 [data-mode="light"] body { color-scheme: light; }
 [data-mode="light"] .folio-editor .bn-block-content[data-content-type="codeBlock"] { background: #23262d !important; }
 
@@ -388,3 +442,58 @@ p { text-wrap: pretty; }
 .folio-editor .bn-block-content[data-content-type="checkListItem"] > div[contenteditable="false"] { display: flex; align-items: center; align-self: flex-start; height: 1.7em; margin-right: .6em; }
 /* rows that scroll sideways on phones show a soft edge, so it's clear there's more */
 @media (max-width: 639px) { .fade-edge { mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); } }
+
+/* ---------- V5.9 print / save as PDF: just the page, black on white ---------- */
+@media print {
+  @page { margin: 18mm 16mm; }
+  html, body, #root, .app-root, main, .note-layer, .editor-veil, .editor-veil > div, .print-area { height: auto !important; overflow: visible !important; background: #fff !important; position: static !important; }
+  body { color: #111 !important; }
+  .app-root > :not(main), main > :not(.note-layer), .no-print, .wallpaper, .candle-overlay, .grain-overlay, [role="status"], .bn-side-menu, .bn-formatting-toolbar { display: none !important; }
+  .print-area .bn-editor { padding-inline: 0 !important; color: #111 !important; }
+  .print-area textarea[aria-label="Title"] { color: #111 !important; }
+  .print-area * { color: inherit; box-shadow: none !important; }
+  .print-area .mx-auto { max-width: none !important; padding-bottom: 0 !important; }
+  .print-area a { color: #1a4fb3 !important; }
+  .folio-editor .bn-block-content[data-content-type="codeBlock"] { background: #f4f4f4 !important; border-color: #ccc !important; }
+  .folio-editor .bn-block-content[data-content-type="table"] table { background: #fff !important; }
+  .folio-editor .bn-block-content[data-content-type="table"] th { background: #eee !important; }
+  .folio-editor .bn-block-content :is(h1, h2, h3) { break-after: avoid; }
+  .folio-editor .bn-block-content[data-content-type="image"], .folio-editor table { break-inside: avoid; }
+}
+
+/* ---------- V6 template previews (live miniatures of the page a template makes) ---------- */
+.tpl-frame { border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px var(--color-line); transition: box-shadow .15s ease, transform .15s ease; }
+button:hover > .tpl-frame { box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent) 55%, var(--color-line)), 0 8px 24px -12px rgb(0 0 0 / .5); }
+.tpl-selected .tpl-frame, button:focus-visible > .tpl-frame { box-shadow: 0 0 0 2px var(--color-accent), 0 10px 28px -14px rgb(0 0 0 / .55); }
+.tpl-page { position: relative; border: 1px solid transparent; border-radius: 12px; color: var(--color-ink); overflow: hidden; line-height: 1.45; }
+.tpl-small { aspect-ratio: 4 / 3.3; font-size: 6.4px; pointer-events: none; }
+.tpl-large { font-size: 12.5px; min-height: 100%; }
+.tpl-cover { height: 3.2em; }
+.tpl-large .tpl-cover { height: 64px; }
+.tpl-body { padding: 1.4em 1.8em 1.6em; }
+.tpl-small .tpl-body { padding: 2.2em 2.6em; }
+.tpl-icon { font-size: 2.4em; line-height: 1; margin-top: -.2em; margin-bottom: .2em; }
+.tpl-cover + .tpl-body .tpl-icon { margin-top: -1.1em; }
+.tpl-title { font-size: 2.05em; font-weight: 700; line-height: 1.15; margin-bottom: .55em; letter-spacing: -.01em; }
+.tpl-h { font-weight: 650; margin: .9em 0 .25em; line-height: 1.2; }
+.tpl-h[data-level="1"] { font-size: 1.6em; } .tpl-h[data-level="2"] { font-size: 1.32em; } .tpl-h[data-level="3"] { font-size: 1.12em; }
+.tpl-p { margin: .15em 0; color: var(--color-ink-2); }
+.tpl-li { display: flex; gap: .5em; align-items: baseline; margin: .12em 0; color: var(--color-ink-2); min-height: 1.3em; }
+.tpl-mark { color: var(--color-muted); min-width: .9em; }
+.tpl-box { flex: none; width: .95em; height: .95em; border: 1.2px solid var(--color-muted); border-radius: .22em; transform: translateY(.12em); }
+.tpl-box.on { background: var(--color-accent); border-color: var(--color-accent); }
+.tpl-quote { border-left: 2px solid var(--color-line); padding-left: .7em; color: var(--color-muted); margin: .3em 0; min-height: 1.2em; }
+.tpl-hr { border: 0; border-top: 1px solid var(--color-line); margin: .8em 0; }
+.tpl-code { font-family: var(--font-mono); background: var(--color-wash); border-radius: .3em; padding: .4em .6em; white-space: pre-wrap; }
+.tpl-img { height: 5em; border-radius: .4em; background: var(--color-wash); margin: .3em 0; }
+.tpl-table { width: 100%; border-collapse: collapse; margin: .45em 0; table-layout: fixed; }
+.tpl-table th, .tpl-table td { border: 1px solid var(--color-line); padding: .25em .45em; text-align: left; vertical-align: top; height: 1.7em; overflow: hidden; color: var(--color-ink-2); }
+.tpl-table th { font-weight: 600; background: color-mix(in srgb, var(--color-wash) 70%, transparent); color: var(--color-ink); }
+.tpl-field { color: var(--color-accent-ink, var(--color-accent)); background: color-mix(in srgb, var(--color-accent) 14%, transparent); border-radius: .3em; padding: 0 .3em; white-space: nowrap; }
+.tpl-auto { border-bottom: 1px dotted color-mix(in srgb, var(--color-accent) 70%, transparent); }
+.tpl-link { color: var(--color-accent-ink, var(--color-accent)); text-decoration: underline; }
+.tpl-pages { display: flex; flex-wrap: wrap; gap: .45em; margin-top: 1.1em; padding-top: .8em; border-top: 1px dashed var(--color-line); }
+.tpl-pagechip { border: 1px solid var(--color-line); border-radius: .5em; padding: .3em .6em; background: var(--color-card); font-size: .95em; }
+.tpl-fade { position: absolute; inset: auto 0 0 0; height: 22%; pointer-events: none; }
+/* the banner on a template's working copy */
+.tpl-banner { background: color-mix(in srgb, var(--color-accent) 13%, var(--color-canvas)); border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 35%, var(--color-line)); }

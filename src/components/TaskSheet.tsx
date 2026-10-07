@@ -24,7 +24,7 @@ export function TaskSheet({ task, onClose, onOpenNote, onDone }: {
     if (!extra && !wordsChanged && !dueChanged && starred === task.starred) return onDone()
     let c = n.content
     if (extra?.remove) c = removeTask(c, task.index)
-    else if (wordsChanged) c = setText(c, task.index, text.trim() || task.text, { due, starred, explicitDue: !!due, owner: owner.trim() || null })
+    else if (wordsChanged) c = setText(c, task.index, text.trim() || task.text, { due, starred, explicitDue: !!due, owner: owner.trim() || null, doing: task.doing })
     else {
       // only the markers changed: keep the item's own formatting
       if (dueChanged) c = setDue(c, task.index, due)

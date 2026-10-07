@@ -1,4 +1,6 @@
-import { Archive, ArchiveRestore, Check, Table2, CheckSquare, Copy, FileText, Lock, MoreHorizontal, Palette, Pin, RotateCcw, Send, Square, Sun, Tag, Trash2, Mic, Star, Layers, ChevronRight } from 'lucide-react'
+import { SlideView } from './SlideView'
+import { metaFor, themeOf } from '../lib/deckRender'
+import { Archive, ArchiveRestore, Check, Table2, CheckSquare, Copy, FileText, Lock, MoreHorizontal, Palette, Pin, RotateCcw, Send, Square, Sun, Tag, Trash2, Mic, Star, Layers, ChevronRight, Presentation } from 'lucide-react'
 import { memo, useRef, useState } from 'react'
 import { toast } from '../lib/toast'
 import { surface } from '../lib/colors'
@@ -137,7 +139,7 @@ export const NoteCard = memo(function NoteCard({ note, labels, childCount, selec
       onClick={() => { if (swipedRef.current) return; if (selecting) onSelect(note.id); else if (stack && note.series) onStack?.(note.series); else onOpen(note.id) }}
       data-note={note.id}
       data-stack={stack ? note.series ?? '' : undefined}
-      className={`group relative cursor-pointer rounded-xl border transition-[box-shadow,transform,border-color] duration-150 fine:hover:-translate-y-px fine:hover:shadow-[0_8px_24px_-10px_color-mix(in_srgb,var(--color-accent)_35%,transparent)] fine:hover:!border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] ${selected ? 'ring-2 ring-accent' : ''} ${dragging ? 'opacity-30' : ''} ${menu ? 'z-30' : ''}`}
+      className={`group relative cursor-pointer rounded-xl border transition-[box-shadow,transform,border-color] duration-150 ${prefs.layout === 'list' ? '' : 'fine:min-h-[96px]'} fine:hover:-translate-y-px fine:hover:shadow-[0_8px_24px_-10px_color-mix(in_srgb,var(--color-accent)_35%,transparent)] fine:hover:!border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] ${selected ? 'ring-2 ring-accent' : ''} ${dragging ? 'opacity-30' : ''} ${menu ? 'z-30' : ''}`}
       style={{
         background: s.background, borderColor: selected ? 'transparent' : s.borderColor,
         transform: dx ? `translateX(${dx}px)` : undefined, transition: dx ? 'none' : undefined, touchAction: 'pan-y',
@@ -161,8 +163,11 @@ export const NoteCard = memo(function NoteCard({ note, labels, childCount, selec
         </button>
       )}
 
-      {cover && !note.image && <div aria-hidden className={`${compact ? 'h-10' : 'h-16'} rounded-t-[11px]`} style={{ background: cover }} />}
-      {img && (
+      {note.deck && !note.locked && note.deck.slides[0] && (
+        <div aria-hidden className="overflow-hidden rounded-t-[11px] border-b border-line/60"><SlideView slide={note.deck.slides[0]} theme={themeOf(note.deck.theme)} meta={metaFor(note.deck, 0)} /></div>
+      )}
+      {cover && !note.image && !note.deck && <div aria-hidden className={`${compact ? 'h-10' : 'h-16'} rounded-t-[11px]`} style={{ background: cover }} />}
+      {img && !note.deck && (
         <img src={img} alt="" draggable={false} className={`block w-full rounded-t-[11px] object-cover ${compact ? 'max-h-36' : 'max-h-56'}`} />
       )}
 
@@ -206,6 +211,8 @@ export const NoteCard = memo(function NoteCard({ note, labels, childCount, selec
             {stack.length > (compact ? 4 : 5) && <p className="mt-0.5 pl-2.5 text-[12px] text-muted">+ {stack.length - (compact ? 4 : 5)} more</p>}
             <p className="mt-2 inline-flex items-center gap-1 text-[12px] text-faint">Tap to fan out <ChevronRight size={12} /></p>
           </div>
+        ) : note.deck ? (
+          <p className="inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--color-accent)_14%,transparent)] px-2 py-0.5 text-[11.5px] text-accent"><Presentation size={12} /> Presentation · {note.deck.slides.length} slides</p>
         ) : note.locked ? (
           <p className="flex items-center gap-2 text-muted"><Lock size={14} /> Locked</p>
         ) : outline ? (

@@ -1,20 +1,24 @@
 import {
   ArrowLeft, BookOpenText, ChevronDown, ChevronUp, Copy, Crop, FileText, FileUp, Highlighter, ImagePlus, LayoutGrid, ListTree, LoaderCircle,
-  Maximize, Minus, MoreHorizontal, NotebookPen, PanelLeft, Plus, Search, Sparkles, TextQuote, Trash2, Type, X,
+  Maximize, Minus, MoreHorizontal, NotebookPen, PanelLeft, Plus, Presentation, Search, Sparkles, TextQuote, Trash2, Type, X,
 } from 'lucide-react'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist'
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { nanoid } from 'nanoid'
 import { createNote, db } from '../lib/db'
+import { useLiveQuery } from 'dexie-react-hooks'
+import type { Note } from '../types'
 import { putImage } from '../lib/blobs'
 import {
   canReopen, cleanTitle, forgetRecord, getRecord, HL_COLORS, openPdf, pageToParagraphs, pdfjs, pickPdf, recentRecords, reopen, saveRecord,
   type Highlight, type HighlightColor, type PdfRecord,
 } from '../lib/margins'
 import { usePhone } from '../lib/mobile'
+import { useAI } from '../lib/prefs'
 import { toast } from '../lib/toast'
 import { NoteEditor, type EditorApi } from './NoteEditor'
 import { IconButton, MenuItem, Popover } from './ui'
+const DeckMaker = lazy(() => import('./DeckMaker').then((m) => ({ default: m.DeckMaker })))
 
 type Size = { w: number; h: number }
 type Tint = 'paper' | 'warm' | 'night'
@@ -175,6 +179,8 @@ function Home({ recents, loading, onOpen, onResume, onForget, onOpenNote }: {
 function Reader({ doc, rec, setRec, onClose, onOpen, onOpenNote, phone }: {
   doc: PDFDocumentProxy; rec: PdfRecord; setRec: (r: PdfRecord) => void; onClose: () => void; onOpen: () => void; onOpenNote: (id: string) => void; phone: boolean
 }) {
+  const aiOK = useAI()
+  const [deck, setDeck] = useState(false)
   const [sizes, setSizes] = useState<Size[]>(() => Array.from({ length: doc.numPages }, () => ({ w: 612, h: 792 })))
   const [paneW, setPaneW] = useState(800)
   const [zoom, setZoom] = useState<number | 'fit'>(rec.zoom ?? 'fit')
@@ -277,7 +283,7 @@ function Reader({ doc, rec, setRec, onClose, onOpen, onOpenNote, phone }: {
   }, [doc.numPages, mode])
   // restore the remembered page once sizes are known
   const restored = useRef(false)
-  useEffect(() => { if (!restored.current && sizes[0] && rec.page > 1) { restored.current = true; requestAnimationFrame(() => goTo(rec.page, false)) } }, [sizes, rec.page, goTo])
+  useEffect(() => { if (!restored.current && sizes[0] && rec.page > 1) { restored.current = true; requestAnimationFrame(() => { goTo(rec.page, false); setTimeout(() => { const el = pageEls.current.get(rec.page), root = scroller.current; if (el && root && Math.abs(root.scrollTop - (el.offsetTop - 12)) > 4) goTo(rec.page, false) }, 160) }) } }, [sizes, rec.page, goTo])
   // Zooming keeps the same spot on the page under your eyes (no jump back to the page top).
   const lastScale = useRef(scale)
   useLayoutEffect(() => {
@@ -323,12 +329,18 @@ function Reader({ doc, rec, setRec, onClose, onOpen, onOpenNote, phone }: {
       title: `${r.title} — notes`, icon: '📄',
       content: [{ type: 'paragraph', content: [txt(`Notes on ${r.name} · ${r.pages} pages`, { italic: true })] }, { type: 'paragraph' }],
     })
-    const next = { ...recRef.current, noteId: n.id }
+    const next = { ...recRef.current, noteId: n.id, ownId: n.id }
     await saveRecord(next); setRec(next)
     return n.id
   }, [setRec])
   const addToNote = useCallback(async (blocks: Block[]) => {
-    await noteFor()
+    const id = await noteFor()
+    // writing into a note that isn't this PDF's own: say once where the quotes come from
+    const n = await db.notes.get(id)
+    const r = recRef.current
+    if (n && !JSON.stringify(n.content ?? []).includes(r.name) && !pending.current.some((b) => JSON.stringify(b).includes(r.name))) {
+      blocks = [{ type: 'paragraph', content: [txt(`From ${r.title} (${r.name})`, { italic: true })] }, ...blocks]
+    }
     if (apiRef.current && notesOpen) { apiRef.current.append(blocks); return }
     pending.current.push(blocks)
     setNotesOpen(true)
@@ -337,6 +349,17 @@ function Reader({ doc, rec, setRec, onClose, onOpen, onOpenNote, phone }: {
     apiRef.current = api
     if (api && pending.current.length) { const q = pending.current; pending.current = []; setTimeout(() => q.forEach((b) => api.append(b)), 60) }
   }, [])
+  /** Point the notes panel (and every quote, highlight and snap) at another note — or back to this PDF's own. */
+  const setTarget = useCallback(async (id: string | null) => {
+    const r0 = recRef.current
+    // "this PDF's own notes": the note made for it earlier (whatever was last written in, for older records)
+    if (!id) { const own = r0.ownId ?? (r0.noteId && (await db.notes.get(r0.noteId))?.title === `${r0.title} — notes` ? r0.noteId : null); const alive = own ? await db.notes.get(own) : null; id = alive && alive.trashedAt === null ? own : null }
+    const next = { ...r0, noteId: id, ownId: r0.ownId ?? (r0.noteId && (await db.notes.get(r0.noteId))?.title === `${r0.title} — notes` ? r0.noteId : r0.ownId ?? null) }
+    apiRef.current = null
+    await saveRecord(next); setRec(next)
+    if (!id) { await noteFor() }
+    setNotesOpen(true)
+  }, [setRec, noteFor])
   const toggleNotes = async () => { if (!notesOpen) await noteFor(); setNotesOpen(!notesOpen) }
 
   // ---- highlights
@@ -491,10 +514,10 @@ function Reader({ doc, rec, setRec, onClose, onOpen, onOpenNote, phone }: {
   const sidePanel = side && (
     <aside aria-label="PDF sidebar" className={`${phone ? 'fixed inset-y-0 left-0 z-50 w-[min(86vw,340px)] shadow-2xl animate-drawer' : 'w-[264px] shrink-0'} flex flex-col border-r border-line/70 bg-side`}>
       <div className="flex items-center gap-1 p-2">
-        <div role="tablist" aria-label="Sidebar" className="flex flex-1 rounded-lg bg-wash p-0.5 text-[12.5px]">
-          {([['contents', 'Contents', <ListTree key="c" size={14} />], ['pages', 'Pages', <LayoutGrid key="p" size={14} />], ['marks', 'Marks', <Highlighter key="m" size={14} />], ['search', 'Find', <Search key="s" size={14} />]] as const).map(([k, l, icon]) => (
+        <div role="tablist" aria-label="Sidebar" className="grid flex-1 grid-cols-4 gap-0.5 rounded-xl bg-wash p-1">
+          {([['contents', 'Contents', <ListTree key="c" size={16} />], ['pages', 'Pages', <LayoutGrid key="p" size={16} />], ['marks', 'Marks', <Highlighter key="m" size={16} />], ['search', 'Find', <Search key="s" size={16} />]] as const).map(([k, l, icon]) => (
             <button key={k} type="button" role="tab" aria-selected={side === k} title={l} onClick={() => setSide(k)}
-              className={`flex flex-1 items-center justify-center gap-1 rounded-md py-1.5 ${side === k ? 'bg-raised text-ink shadow-sm' : 'text-muted hover:text-ink'}`}>{icon}<span className="max-[1180px]:hidden">{l}</span></button>
+              className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1 pb-1 pt-1.5 text-[11px] font-medium leading-none transition-colors ${side === k ? 'bg-raised text-ink shadow-sm' : 'text-muted hover:text-ink'}`}>{icon}<span className="truncate">{l}</span></button>
           ))}
         </div>
         {phone && <IconButton size="sm" label="Close" onClick={() => setSide(null)}><X size={16} /></IconButton>}
@@ -583,7 +606,8 @@ function Reader({ doc, rec, setRec, onClose, onOpen, onOpenNote, phone }: {
             {phone && <MenuItem icon={<Type size={15} />} onClick={() => { setMenu(null); setMode(mode === 'page' ? 'text' : 'page') }}>{mode === 'page' ? 'Text view' : 'Page view'}</MenuItem>}
             {phone && <MenuItem icon={<Search size={15} />} onClick={() => { setMenu(null); setSide('search') }}>Find in PDF</MenuItem>}
             <MenuItem icon={<ImagePlus size={15} />} onClick={() => { setMenu(null); snap(page) }}>Snap page {page} into notes</MenuItem>
-            <MenuItem icon={<Sparkles size={15} />} onClick={() => { setMenu(null); askAbout('summary', page) }}>Summarise page {page}</MenuItem>
+            {aiOK && <MenuItem icon={<Sparkles size={15} />} onClick={() => { setMenu(null); askAbout('summary', page) }}>Summarise page {page}</MenuItem>}
+            <MenuItem icon={<Presentation size={15} />} onClick={() => { setMenu(null); setDeck(true) }}>Make a presentation…</MenuItem>
             {rec.noteId && <MenuItem icon={<NotebookPen size={15} />} onClick={() => { setMenu(null); onOpenNote(rec.noteId!) }}>Open notes as a full page</MenuItem>}
             <MenuItem icon={<FileUp size={15} />} onClick={() => { setMenu(null); onOpen() }}>Open another PDF…</MenuItem>
           </Popover>
@@ -593,6 +617,7 @@ function Reader({ doc, rec, setRec, onClose, onOpen, onOpenNote, phone }: {
           <NotebookPen size={15} /><span className="max-[420px]:hidden">Notes</span>
         </button>
       </header>
+      {deck && <Suspense fallback={null}><DeckMaker source={{ kind: 'pdf', doc, name: rec.title || rec.name }} onClose={() => setDeck(false)} onCreated={(id) => { setDeck(false); onOpenNote(id) }} /></Suspense>}
 
       <div className="relative flex min-h-0 flex-1">
         {phone && side && <div className="animate-fade fixed inset-0 z-40 bg-scrim" onClick={() => setSide(null)} />}
@@ -642,16 +667,14 @@ function Reader({ doc, rec, setRec, onClose, onOpen, onOpenNote, phone }: {
 
         {/* notes */}
         {notesOpen && rec.noteId && (
-          <div ref={notesHost} className={phone ? 'animate-sheet fixed inset-0 z-50 flex flex-col bg-canvas' : 'relative flex shrink-0 border-l border-line/70 bg-canvas'} style={phone ? undefined : { width: notesW }}>
+          <div ref={notesHost} className={phone ? 'animate-sheet fixed inset-0 z-50 flex flex-col bg-canvas' : 'relative flex shrink-0 flex-col border-l border-line/70 bg-canvas'} style={phone ? undefined : { width: notesW }}>
             {!phone && <div onPointerDown={drag} role="separator" aria-orientation="vertical" aria-label="Resize notes" className="absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize hover:bg-accent/30" />}
-            {phone && (
-              <div className="flex items-center gap-2 border-b border-line px-3 pb-2 pt-[max(env(safe-area-inset-top),10px)]">
-                <span className="font-title flex-1 truncate text-[16px]">Notes · p. {page}</span>
-                <button type="button" onClick={() => setNotesOpen(false)} className="rounded-full bg-wash px-3 py-1.5 text-[13px] font-medium">Back to PDF</button>
-              </div>
-            )}
+            <div className={`flex items-center gap-2 border-b border-line/70 px-3 ${phone ? 'pb-2 pt-[max(env(safe-area-inset-top),10px)]' : 'py-1.5'}`}>
+              <NoteTarget current={rec.noteId} ownId={rec.ownId ?? null} onPick={setTarget} />
+              {phone && <button type="button" onClick={() => setNotesOpen(false)} className="shrink-0 rounded-full bg-wash px-3 py-1.5 text-[13px] font-medium">Back to PDF</button>}
+            </div>
             <div className="min-h-0 min-w-0 flex-1">
-              <NoteEditor id={rec.noteId} embedded onReady={onReady} onClose={() => setNotesOpen(false)} onNavigate={onOpenNote} focus={false} setFocus={() => undefined} />
+              <NoteEditor key={rec.noteId} id={rec.noteId} embedded onReady={onReady} onClose={() => setNotesOpen(false)} onNavigate={onOpenNote} focus={false} setFocus={() => undefined} />
             </div>
           </div>
         )}
@@ -666,7 +689,7 @@ function Reader({ doc, rec, setRec, onClose, onOpen, onOpenNote, phone }: {
           ))}
           <span className="mx-1 h-5 w-px bg-line" />
           <button type="button" onClick={() => { quote(sel.text, sel.page); window.getSelection()?.removeAllRanges(); setSel(null) }} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] hover:bg-wash"><TextQuote size={15} /> Quote</button>
-          <button type="button" onClick={() => { askAbout('explain', sel.page, sel.text); setSel(null) }} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] hover:bg-wash"><Sparkles size={15} /> Explain</button>
+          {aiOK && <button type="button" onClick={() => { askAbout('explain', sel.page, sel.text); setSel(null) }} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] hover:bg-wash"><Sparkles size={15} /> Explain</button>}
           <IconButton size="sm" label="Copy" onClick={() => { navigator.clipboard?.writeText(sel.text); toast('Copied'); setSel(null) }}><Copy size={15} /></IconButton>
         </div>
       )}
@@ -835,6 +858,7 @@ function Thumb({ doc, n }: { doc: PDFDocumentProxy; n: number }) {
 function TextView({ doc, n, total, onGo, getText, title, onAdd }: {
   doc: PDFDocumentProxy; n: number; total: number; onGo: (n: number) => void; getText: (n: number) => Promise<string>; title: string; onAdd: (b: Block[]) => void
 }) {
+  const ai = useAI()
   const [md, setMd] = useState<string | null>(null)
   const [tidy, setTidy] = useState<{ n: number; md?: string; busy?: boolean; error?: string } | null>(null)
   const [size, setSize] = useState(() => pref('textSize', 20))
@@ -877,9 +901,9 @@ function TextView({ doc, n, total, onGo, getText, title, onAdd }: {
         <button type="button" onClick={() => setFont(font === 'serif' ? 'sans' : 'serif')} className="rounded-md px-2 py-1 text-[12.5px] text-ink-2 hover:bg-wash">{font === 'serif' ? 'Serif' : 'Sans'}</button>
         <input type="range" aria-label="Text size" min={15} max={30} value={size} onChange={(e) => setSize(Number(e.target.value))} className="w-24" />
         <span className="mx-1 h-5 w-px bg-line" />
-        <button type="button" onClick={runTidy} disabled={!md?.trim() || tidy?.busy} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] text-ink-2 hover:bg-wash disabled:opacity-50">
+        {ai && <button type="button" onClick={runTidy} disabled={!md?.trim() || tidy?.busy} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] text-ink-2 hover:bg-wash disabled:opacity-50">
           {tidy?.busy && tidy.n === n ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} className="text-accent" />} Tidy with AI
-        </button>
+        </button>}
         <button type="button" onClick={addPage} disabled={!shown?.trim()} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12.5px] text-ink-2 hover:bg-wash disabled:opacity-50"><NotebookPen size={14} /> Add to notes</button>
         <IconButton size="sm" label="Back to page view" onClick={() => document.querySelector<HTMLButtonElement>('[aria-label="View"] button')?.click()}><Maximize size={14} /></IconButton>
       </div>
@@ -913,5 +937,47 @@ function MiniMd({ md, big }: { md: string; big?: boolean }) {
         return <p key={i} className="mb-[0.9em]">{inline(t.replace(/\n/g, ' '))}</p>
       })}
     </>
+  )
+}
+
+/**
+ * "Writing in ▾" — which note the panel shows and where quotes, highlights and snaps go:
+ * this PDF's own notes, or any note you already have.
+ */
+function NoteTarget({ current, ownId, onPick }: { current: string | null; ownId: string | null; onPick: (id: string | null) => void }) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const notes = useLiveQuery(() => (open ? db.notes.filter((n) => n.trashedAt === null && !n.locked && !n.templateDraft && !n.deck).toArray() : Promise.resolve([] as Note[])), [open]) ?? []
+  const cur = useLiveQuery(() => (current ? db.notes.get(current) : undefined), [current])
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  const list = notes.filter((n) => !words.length || words.every((w) => `${n.title} ${n.preview}`.toLowerCase().includes(w))).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 40)
+  return (
+    <div className="relative min-w-0 flex-1">
+      <button type="button" onClick={() => setOpen(!open)} aria-haspopup="listbox" aria-expanded={open} title="Choose the note your quotes go into"
+        className="flex w-full min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[13px] hover:bg-wash">
+        <span className="shrink-0 text-muted">Writing in</span>
+        <span className="min-w-0 truncate font-medium text-ink">{cur?.icon ? `${cur.icon} ` : ''}{cur?.title || 'Untitled'}</span>
+        <ChevronDown size={14} className="ml-auto shrink-0 text-muted" />
+      </button>
+      <Popover open={open} onClose={() => { setOpen(false); setQ('') }} className="left-0 top-10 w-[min(340px,86vw)] p-2">
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a note…" aria-label="Find a note"
+          className="mb-1.5 w-full rounded-lg border border-line bg-canvas px-3 py-1.5 text-[13.5px] outline-none focus:border-accent" />
+        <div role="listbox" aria-label="Notes" className="max-h-[50vh] overflow-y-auto">
+          {!q && current !== ownId && (
+            <button type="button" role="option" aria-selected={false} onClick={() => { setOpen(false); onPick(null) }}
+              className="mb-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13.5px] text-accent-ink hover:bg-wash"><Plus size={14} /> This PDF’s own notes</button>
+          )}
+          {list.map((n) => (
+            <button key={n.id} type="button" role="option" aria-selected={n.id === current} onClick={() => { setOpen(false); setQ(''); if (n.id !== current) onPick(n.id) }}
+              className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13.5px] hover:bg-wash ${n.id === current ? 'bg-wash' : ''}`}>
+              <span className="w-4 shrink-0 text-center">{n.icon ?? <FileText size={14} className="inline text-muted" />}</span>
+              <span className="min-w-0 flex-1 truncate">{n.title || n.preview.replace(/[\u0001-\u0003]/g, '').split('\n')[0] || 'Untitled'}</span>
+              {n.id === current && <span className="text-[11.5px] text-accent-ink">current</span>}
+            </button>
+          ))}
+          {!list.length && <p className="px-2.5 py-3 text-[13px] text-muted">No notes match.</p>}
+        </div>
+      </Popover>
+    </div>
   )
 }

@@ -1,4 +1,4 @@
-# Folio — V5.6 (web app)
+# Folio — 6.1 (web app)
 
 Private, offline notes: Google Keep outside, Notion inside.
 Everything is stored in the browser on each device (IndexedDB). No accounts, no server, no cloud database.
@@ -23,6 +23,47 @@ Export a backup in Settings first, just in case. Drop the whole folder (not just
 3. Open the URL on the laptop (Chrome/Edge → Install app) and on the Tab A9 (Chrome → ⋮ → Add to Home screen / Install).
 
 Vercel only serves the app's static files; your notes never go to Vercel. After the first load, the app works fully offline.
+
+## New in 6.1 — Presentations
+
+- **Make a presentation** from a note (with its pages inside), a Markdown file or a PDF — from a note’s ⋯ menu, the PDF menu in Margins, the + sheet on phones, or search (“make a presentation”).
+- **With AI (optional)**: choose the purpose (inform, pitch, teach, status update, summary), the length and speaker notes, add your own instruction; the AI designs varied slides — big numbers, two columns, tables, quotes — from your content only. Rewrite any one slide: shorter, punchier, more detail, simpler.
+- **Without AI**: *From headings* turns each heading into a slide with its points, tables, quotes and pictures; a PDF can become *one slide per page*. Nothing leaves the device.
+- **8 themes** (Folio Classic, Boardroom, Midnight, Minimal, Sunrise, Blueprint, Forest, Studio), changeable any time.
+- **The studio**: slides on the left, the slide in the middle, its content on the right — 9 layouts, add / duplicate / reorder / delete (with undo), pictures, speaker notes.
+- **Present** full screen: → / Space / click to advance, ← back, N for speaker notes, Esc to end.
+- **Download** as PowerPoint (.pptx, with speaker notes), PDF (print) or a Markdown outline. Presentations are notes too: they show their title slide on the card and are searchable.
+
+- **Quotes into any note**: in Margins, the notes panel shows *Writing in ▾* — pick any note you already have, and quotes, highlights and snapped pages go there (with a line saying which PDF they came from). Switch back to the PDF’s own notes any time.
+
+**Layout fixes**
+- Margins: the sidebar tabs (Contents · Pages · Marks · Find) now stack icon over label, so they never squash.
+- Long notes: the contents list sits beside the page, below the cover, and never over the text — the page moves aside a little on laptops, and narrower windows get a Contents button instead. Long outlines show the top level plus only the section you’re in.
+- The word count moves into the header when the page fills the window, instead of floating over the text.
+- Opening a note closes anything that was in front of it (search, templates, the presentation maker).
+
+## New in 6.0 — Templates and export
+
+**Templates, like a slide-deck gallery for your notes**
+- A gallery of 26 templates in seven categories (Meetings, Projects, Engineering, Planning, Research & writing, Personal, Journal), each shown as a live miniature of the page it makes — colour, cover, tables and all. Search, browse, pick one to see a full preview.
+- **Questions**: `{{Client}}` in a template becomes a question when you use it; `{{Due:date}}` asks for a date, `{{Status:Draft/Final}}` offers a choice. Skip one and it stays as a grey placeholder to type over.
+- **Filled in for you**: `{{date}}`, `{{date:short}}`, `{{time}}`, `{{weekday}}`, `{{week}}`, `{{monday}}`, `{{tomorrow}}`, `{{name}}`.
+- **Multi-page templates**: one template can create a page and the pages inside it (try *Project hub*).
+- **Your own**: any note → ⋯ → *Save as template…* (name, icon, category, with its pages inside and its look). Edit a template in the full editor; *Customise* a built-in to make your own copy.
+- **Defaults**: start every new note from a template, and choose the template for today’s daily note.
+- **Insert**: type `/template` in any note to drop a template’s content in place.
+- **Share**: save a template as a `.folio-template.json` file (images included) and import it on another device.
+
+**Export anything, in the format you need**
+- One Export dialog for a note (⋯ → *Export…*), a selection (select cards → Export) or everything (Settings → *Export notes…*).
+- **Word (.docx)** with real headings, numbered lists, checklists, tables, quotes, code and images · **PDF** via the print dialog · **Markdown** (Obsidian-friendly, images in `assets/`) · **Web page** (one self-contained file) · **Plain text** · **Copy** formatted (for Word, Outlook, Teams, Docs) or as Markdown.
+- Include the pages inside, images, and dates & labels; one document or separate files in a zip. Links between exported notes still work.
+
+**One name, no device names**
+- Settings has one *Your name*. The greeting uses your first name; the sidebar shows your initials, your name and when you last backed up. Backups and shared links say which browser they came from automatically.
+
+**Smaller things**
+- The Tasks badge counts only what’s overdue or due today. Recents shows the last six notes (daily notes live in Today/Journal). Short cards are tall enough that clicking them opens the note instead of a menu. Typing the start of an action in search (“export…”) puts that action first.
 
 ## New in V5.6 — Calmer, lighter, fits every screen
 Built on the 5.4 look (5.5's experiments set aside), shaped by what people say they want from note apps: fast capture, a clean distraction-free editor, beautiful type, your data on your device, no clutter.

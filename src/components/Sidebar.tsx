@@ -1,9 +1,11 @@
-import { Archive, BookOpen, BookOpenText, CheckSquare, FileText, Lightbulb, Lock, MoreHorizontal, PanelLeftClose, Plus, Search, Settings, SquarePen, Sun, Trash2, X } from 'lucide-react'
+import { Archive, BookOpen, BookOpenText, CheckSquare, FileText, Lightbulb, Lock, MoreHorizontal, PanelLeftClose, Plus, Search, Settings, SquarePen, Sun, Trash2, UserRound, X } from 'lucide-react'
 import { useState } from 'react'
 import { createLabel } from '../lib/db'
 import { LabelMenu, labelColor } from './LabelMenu'
 import { Wordmark } from './Brand'
 import type { Label, Note, View } from '../types'
+import { initials } from '../lib/device'
+import { backupStatus, useLastBackup } from '../lib/backup'
 
 function Item({ icon, children, active, onClick, count }: { icon: React.ReactNode; children: React.ReactNode; active?: boolean; onClick: () => void; count?: number }) {
   return (
@@ -16,12 +18,13 @@ function Item({ icon, children, active, onClick, count }: { icon: React.ReactNod
   )
 }
 
-export function Sidebar({ view, setView, labels, labelCounts, recents, openTasks, onNew, onToday, onSearch, onOpen, onSettings, onCollapse, deviceName, mobile }: {
+export function Sidebar({ view, setView, labels, labelCounts, recents, openTasks, onNew, onToday, onSearch, onOpen, onSettings, onCollapse, name, noteCount, mobile }: {
   view: View; setView: (v: View) => void; labels: Label[]; labelCounts: Record<string, number>; recents: Note[]; openTasks: number
   onNew: () => void; onToday: () => void; onSearch: () => void; onOpen: (id: string) => void; onSettings: () => void; onCollapse: () => void
-  deviceName: string; mobile?: boolean
+  name: string; noteCount: number; mobile?: boolean
 }) {
   const [editing, setEditing] = useState(false)
+  const status = backupStatus(useLastBackup(), noteCount)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [newLabel, setNewLabel] = useState('')
   const is = (k: View['kind'], labelId?: string) => view.kind === k && (!labelId || (view.kind === 'label' && view.labelId === labelId))
@@ -55,7 +58,7 @@ export function Sidebar({ view, setView, labels, labelCounts, recents, openTasks
         <Item icon={<FileText size={18} />} active={is('pages')} onClick={() => setView({ kind: 'pages' })}>Pages</Item>
         <Item icon={<BookOpen size={18} />} active={is('journal')} onClick={() => setView({ kind: 'journal' })}>Journal</Item>
         <Item icon={<BookOpenText size={18} />} active={is('margins')} onClick={() => setView({ kind: 'margins' })}>Margins</Item>
-        <Item icon={<CheckSquare size={18} />} active={is('tasks')} onClick={() => setView({ kind: 'tasks' })} count={openTasks}>Tasks</Item>
+        <Item icon={<CheckSquare size={18} />} active={is('tasks') || is('review')} onClick={() => setView({ kind: 'tasks' })} count={openTasks}>Tasks</Item>
         <Item icon={<Archive size={18} />} active={is('archive')} onClick={() => setView({ kind: 'archive' })}>Archive</Item>
         <Item icon={<Trash2 size={18} />} active={is('trash')} onClick={() => setView({ kind: 'trash' })}>Trash</Item>
       </nav>
@@ -107,11 +110,11 @@ export function Sidebar({ view, setView, labels, labelCounts, recents, openTasks
       </div>
 
       <div className="border-t border-line p-2 pb-[max(env(safe-area-inset-bottom),8px)]">
-        <button type="button" onClick={onSettings} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-wash">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#b3261e] text-[12px] font-semibold text-white">{deviceName.slice(0, 2).toUpperCase()}</span>
+        <button type="button" onClick={onSettings} aria-label={`Settings${name ? ` — ${name}` : ''}`} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-wash">
+          <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-[12px] font-semibold text-on-accent">{initials(name) || <UserRound size={16} />}</span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[14px] text-ink">{deviceName}</span>
-            <span className="block text-[12px] text-muted">This device · offline</span>
+            <span className={`block truncate text-[14px] ${name ? 'text-ink' : 'text-muted'}`}>{name || 'Add your name'}</span>
+            {status.text && <span className={`flex items-center gap-1.5 text-[12px] ${status.late ? 'text-ink-2' : 'text-muted'}`}>{status.late && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warn" />}{status.text}</span>}
           </span>
           <Settings size={17} className="text-muted" />
         </button>

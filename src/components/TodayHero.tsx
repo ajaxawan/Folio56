@@ -4,6 +4,7 @@ import { addDailyTask, updateNote } from '../lib/db'
 import { greeting, usePrefs } from '../lib/prefs'
 import { toggleChecklistItem } from '../lib/preview'
 import { todayKey } from '../lib/templates'
+import { firstName } from '../lib/device'
 import { usePhone } from '../lib/mobile'
 import { collectTasks } from '../lib/tasks'
 import type { Note } from '../types'
@@ -15,8 +16,8 @@ const firstLine = (s: string) => s.replace(/[\u0001\u0002\u0003]/g, '').split('\
  * The "Today" home card: the date, today's focus list, what's due, and a line to pick up the page
  * you were last working on. (No streaks, rings or activity grids — Folio doesn't keep score.)
  */
-export function TodayHero({ notes, onOpenToday, onTasks, onJournal, onOpen }: {
-  notes: Note[]; onOpenToday: () => void; onTasks: () => void; onJournal?: () => void; onOpen?: (id: string) => void
+export function TodayHero({ notes, onOpenToday, onTasks, onJournal, onOpen, onReview }: {
+  notes: Note[]; onOpenToday: () => void; onTasks: () => void; onJournal?: () => void; onOpen?: (id: string) => void; onReview?: () => void
 }) {
   const { prefs, set } = usePrefs()
   const phone = usePhone()
@@ -119,13 +120,14 @@ export function TodayHero({ notes, onOpenToday, onTasks, onJournal, onOpen }: {
         <div>
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-[.14em] text-accent">Today</div>
           <div className="font-title text-[40px] leading-none tracking-tight lg:text-[48px]">{weekday}</div>
-          <div className="mt-2 text-[15px] text-ink-2">{now.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })} · <span className="text-muted">{greeting()}{prefs.name ? `, ${prefs.name}` : ''}.</span></div>
+          <div className="mt-2 text-[15px] text-ink-2">{now.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })} · <span className="text-muted">{greeting()}{prefs.name.trim() ? `, ${firstName(prefs.name)}` : ''}.</span></div>
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <button type="button" onClick={onOpenToday} className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-[13px] font-medium text-on-accent shadow-lg shadow-black/20 transition-transform hover:translate-x-0.5">
               {today ? "Open today's note" : "Start today's note"} <ArrowRight size={14} />
             </button>
             {onJournal && <button type="button" onClick={onJournal} className="inline-flex items-center gap-1.5 rounded-full border border-line px-3.5 py-2 text-[13px] text-ink-2 hover:border-accent/60"><Mic size={14} className="text-red-400" /> Speak it</button>}
             <button type="button" onClick={onTasks} className="px-2 py-2 text-[13px] text-muted hover:text-ink">{dueLabel} →</button>
+            {onReview && [5, 6, 0].includes(now.getDay()) && <button type="button" onClick={onReview} className="px-2 py-2 text-[13px] text-muted hover:text-ink">Week in review →</button>}
           </div>
         </div>
         <div className="min-w-0">

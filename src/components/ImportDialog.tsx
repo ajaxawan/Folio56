@@ -32,7 +32,7 @@ export default function ImportDialog({ initialFiles, defaultLabelIds = [], onClo
   const [drag, setDrag] = useState(false)
   const folderInput = useRef<HTMLInputElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
-  const pages = useLiveQuery(() => db.notes.filter((n) => n.trashedAt === null && !n.locked).toArray(), []) ?? []
+  const pages = useLiveQuery(() => db.notes.filter((n) => n.trashedAt === null && !n.locked && !n.templateDraft).toArray(), []) ?? []
   const labels = useLiveQuery(() => db.labels.toArray(), []) ?? []
 
   const addFiles = async (files: File[]) => {

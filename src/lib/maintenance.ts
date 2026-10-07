@@ -47,6 +47,8 @@ export async function runMaintenance() {
   await ensurePersistent()
   try { health.migrated = (await migrateInlineImages()).moved } catch (e) { console.warn('[folio] image migration skipped', e) }
   try { health.repaired = await repair() } catch (e) { console.warn('[folio] repair skipped', e) }
+  // V6: a template left open when the tab closed is saved back into the template.
+  try { if (await db.notes.filter((n) => !!n.templateDraft && n.updatedAt < performance.timeOrigin).count()) await import('./templateKit').then((m) => m.settleDrafts()) } catch (e) { console.warn('[folio] template drafts', e) }
   // V5.4: card previews now show a few lines of each code block — refresh them once.
   try {
     if (!(await db.meta.get('derive54'))?.value) {

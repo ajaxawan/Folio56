@@ -13,6 +13,14 @@ let _ed: BlockNoteEditor | null = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ed = () => (_ed ??= BlockNoteEditor.create({ schema } as any) as unknown as BlockNoteEditor)
 
+/** Markdown → editor blocks (used for built-in templates and pasted text). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const mdToBlocks = async (md: string): Promise<any[]> => (await ed().tryParseMarkdownToBlocks(md)) as any[]
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const blocksToMd = (blocks: any[]) => ed().blocksToMarkdownLossy(blocks as any)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const blocksToHtml = (blocks: any[]) => ed().blocksToHTMLLossy(blocks as any)
+
 export interface ParsedDoc {
   path: string            // relative path inside an imported folder ("" for single files)
   fileName: string
@@ -226,7 +234,7 @@ export function noteToMarkdown(n: Note, labelNames: Record<string, string>) {
 /** Every unlocked note as a .md file in a zip, folders for sub-pages, images in /assets. */
 /** Every visible note as Markdown files (+ extracted images), keyed by relative path. */
 export async function buildMarkdownFiles() {
-  const notes = (await db.notes.toArray()).filter((n) => n.trashedAt === null && !n.locked)
+  const notes = (await db.notes.toArray()).filter((n) => n.trashedAt === null && !n.locked && !n.templateDraft)
   const labelNames = Object.fromEntries((await db.labels.toArray()).map((l) => [l.id, l.name]))
   const byId = new Map(notes.map((n) => [n.id, n]))
   const files: Record<string, Uint8Array> = {}

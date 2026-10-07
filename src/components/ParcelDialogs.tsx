@@ -1,7 +1,7 @@
 import { Check, ClipboardPaste, Copy, Image as ImageIcon, KeyRound, Link2, Lock, RefreshCw, Send, Share2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { db } from '../lib/db'
-import { friendlyDate, getDeviceName } from '../lib/device'
+import { friendlyDate, senderName } from '../lib/device'
 import {
   accept, collect, fromHash, isEncrypted, LINK_HARD_LIMIT, LINK_SOFT_LIMIT, NeedsCode, newCode, pack, preview, stripImages, toLink, unpack, WrongCode,
   type Incoming, type ParcelContent,
@@ -38,7 +38,7 @@ function SendDialog({ ids }: { ids: string[] | 'all' }) {
 
   useEffect(() => {
     (async () => {
-      const list = ids === 'all' ? (await db.notes.filter((n) => n.trashedAt === null && !n.parentId).primaryKeys()) as string[] : ids
+      const list = ids === 'all' ? (await db.notes.filter((n) => n.trashedAt === null && !n.parentId && !n.templateDraft).primaryKeys()) as string[] : ids
       setInfo(await collect(list))
     })()
   }, [ids])
@@ -46,7 +46,7 @@ function SendDialog({ ids }: { ids: string[] | 'all' }) {
   // Re-encrypt only after typing pauses (each build runs PBKDF2).
   useEffect(() => { const t = setTimeout(() => setSettledCode(code), 350); return () => clearTimeout(t) }, [code])
 
-  const from = getDeviceName()
+  const from = senderName()
   const activeCode = protect && settledCode.trim() ? settledCode : null
   const content = useMemo<ParcelContent | null>(() => info && { v: 1, from, at, notes: info.notes, labels: info.labels }, [info, from, at])
 

@@ -2,10 +2,12 @@ import { AlertCircle, ArrowUpRight, CalendarDays, Check, ChevronRight, Inbox, Pl
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { addTaskTo, db, inboxNote, updateNote } from '../lib/db'
 import {
-  collectTasks, dateOf, dueState, friendlyDue, keyOf, parseQuickAdd, quickAddText, setChecked, setDue, setStar, taskKey, type Task,
+  collectTasks, dateOf, dueState, friendlyDue, keyOf, parseQuickAdd, quickAddText, setChecked, setDoing, setDue, setStar, taskKey, type Task,
 } from '../lib/tasks'
 import type { Note } from '../types'
 import { TaskSheet } from './TaskSheet'
+import { TaskBoard, type Column } from './TaskBoard'
+import { Segmented } from './ui'
 
 type List = 'today' | 'upcoming' | 'anytime' | 'all' | 'done'
 const DAY = 86400000
@@ -24,8 +26,10 @@ const ownerHue = (name: string) => { let h = 0; for (const ch of name) h = (h * 
  * Every checkbox in Folio, as one to-do list. Ticking, dating or starring here changes the
  * checkbox in its note. Smart lists: Today (incl. overdue), Upcoming, Anytime, All, Done.
  */
-export function TasksView({ notes, onOpen }: { notes: Note[]; onOpen: (id: string) => void }) {
+export function TasksView({ notes, onOpen, onReview }: { notes: Note[]; onOpen: (id: string) => void; onReview?: () => void }) {
   const [list, setList] = useState<List>('today')
+  const [mode, setModeRaw] = useState<'list' | 'board'>(() => { try { return localStorage.getItem('folio.tasksMode') === 'board' ? 'board' : 'list' } catch { return 'list' } })
+  const setMode = (m: 'list' | 'board') => { setModeRaw(m); try { localStorage.setItem('folio.tasksMode', m) } catch { /* private mode */ } }
   const [owner, setOwner] = useState<string | null>(null)
   const [sheet, setSheet] = useState<Task | null>(null)
   const [toast, setToast] = useState<null | { msg: string; undo?: () => void }>(null)
@@ -57,6 +61,10 @@ export function TasksView({ notes, onOpen }: { notes: Note[]; onOpen: (id: strin
     }
   }
   const star = (t: Task) => edit(t, (c) => setStar(c, t.index, !t.starred))
+  const move = async (t: Task, to: Column) => {
+    const r = await edit(t, (c) => setDoing(setChecked(c, t.index, to === 'done'), t.index, to === 'doing'))
+    setToast({ msg: to === 'done' ? `Done: ${t.text}` : to === 'doing' ? `Started: ${t.text}` : `Back to To do: ${t.text}`, undo: r ? () => updateNote(r.id, { content: r.before }) : undefined })
+  }
   const moveAllToToday = async (ts: Task[]) => {
     // one write per note, applied in turn so indices stay valid
     const byNote = new Map<string, Task[]>()
@@ -119,16 +127,28 @@ export function TasksView({ notes, onOpen }: { notes: Note[]; onOpen: (id: strin
   ]
 
   return (
-    <div className="mx-auto w-full max-w-2xl pb-10">
-      <div className="mb-4">
-        <h1 className="font-title text-[30px] font-bold tracking-tight">Tasks</h1>
-        <p className="text-[13px] text-muted">
-          {counts.overdue > 0 && <span className="text-danger">{counts.overdue} overdue · </span>}
-          {counts.today - counts.overdue} due today · {counts.upcoming} coming up · {counts.anytime} anytime
-        </p>
+    <div className={`mx-auto w-full pb-10 ${mode === 'board' ? 'max-w-5xl' : 'max-w-2xl'}`}>
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="font-title text-[30px] font-bold tracking-tight">Tasks</h1>
+          <p className="text-[13px] text-muted">
+            {counts.overdue > 0 && <span className="text-danger">{counts.overdue} overdue · </span>}
+            {counts.today - counts.overdue} due today · {counts.upcoming} coming up · {counts.anytime} anytime
+          </p>
+        </div>
+        {onReview && <button type="button" onClick={onReview} className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-[13px] text-ink-2 hover:border-accent/50 hover:text-ink"><CalendarDays size={14} /> Weekly review</button>}
+        <div className="w-40" aria-label="Show tasks as"><Segmented value={mode} onChange={setMode} options={[{ value: 'list', label: 'List' }, { value: 'board', label: 'Board' }]} /></div>
       </div>
 
-      <QuickAdd list={list} onAdded={(m) => setToast({ msg: m })} />
+      <QuickAdd list={mode === 'board' ? 'anytime' : list} onAdded={(m) => setToast({ msg: m })} />
+
+      {mode === 'board' && (
+        <>
+          {owners.length > 0 && <OwnerFilter owners={owners} owner={owner} setOwner={setOwner} />}
+          <TaskBoard tasks={all.filter(mine)} onMove={move} onOpenSheet={setSheet} onOpenNote={onOpen} />
+        </>
+      )}
+      {mode === 'list' && <>
 
       <div className="fade-edge no-scrollbar -mx-3 mb-3 flex gap-1.5 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0" role="tablist" aria-label="Task lists">
         {tabs.map((t) => (
@@ -140,17 +160,7 @@ export function TasksView({ notes, onOpen }: { notes: Note[]; onOpen: (id: strin
         ))}
       </div>
 
-      {owners.length > 0 && list !== 'done' && (
-        <div className="no-scrollbar -mx-3 mb-4 flex items-center gap-1.5 overflow-x-auto px-3 sm:mx-0 sm:px-0" aria-label="Filter by person">
-          <User size={14} className="shrink-0 text-faint" />
-          {[null, ...owners, '—'].map((o) => (
-            <button key={o ?? 'all'} type="button" onClick={() => setOwner(o)}
-              className={`shrink-0 rounded-full px-2.5 py-1 text-[12.5px] ${owner === o ? 'bg-wash-2 text-ink' : 'text-muted hover:text-ink'}`}>
-              {o === null ? 'Everyone' : o === '—' ? 'Unassigned' : o}
-            </button>
-          ))}
-        </div>
-      )}
+      {owners.length > 0 && list !== 'done' && <OwnerFilter owners={owners} owner={owner} setOwner={setOwner} />}
 
       {groups.map((g) => {
         if (shown >= limit) return null
@@ -179,6 +189,7 @@ export function TasksView({ notes, onOpen }: { notes: Note[]; onOpen: (id: strin
       {shown >= limit && <button type="button" onClick={() => setLimit((l) => l + 150)} className="mx-auto mb-8 block rounded-full border border-line px-4 py-2 text-[13px] text-ink-2 hover:border-accent/60">Show more</button>}
 
       {groups.length === 0 && <Empty list={list} hasAny={all.length > 0} />}
+      </>}
 
       {sheet && <TaskSheet task={sheet} onClose={() => setSheet(null)} onOpenNote={(id) => { setSheet(null); onOpen(id) }}
         onDone={(msg, undo) => { setSheet(null); if (msg) setToast({ msg, undo }) }} />}
@@ -189,6 +200,20 @@ export function TasksView({ notes, onOpen }: { notes: Note[]; onOpen: (id: strin
           {toast.undo && <button type="button" onClick={() => { toast.undo!(); setToast(null) }} className="shrink-0 font-semibold text-accent">Undo</button>}
         </div>
       )}
+    </div>
+  )
+}
+
+function OwnerFilter({ owners, owner, setOwner }: { owners: string[]; owner: string | null; setOwner: (o: string | null) => void }) {
+  return (
+    <div className="fade-edge no-scrollbar -mx-3 mb-4 flex items-center gap-1.5 overflow-x-auto px-3 sm:mx-0 sm:px-0" aria-label="Filter by person">
+      <User size={14} className="shrink-0 text-faint" />
+      {[null, ...owners, '—'].map((o) => (
+        <button key={o ?? 'all'} type="button" onClick={() => setOwner(o)}
+          className={`shrink-0 rounded-full px-2.5 py-1 text-[12.5px] ${owner === o ? 'bg-wash-2 text-ink' : 'text-muted hover:text-ink'}`}>
+          {o === null ? 'Everyone' : o === '—' ? 'Unassigned' : o}
+        </button>
+      ))}
     </div>
   )
 }
@@ -278,8 +303,9 @@ const TaskRow = memo(function TaskRow({ t, settling, showNote, onToggle, onStar,
         </button>
         <button type="button" onClick={() => onOpenSheet(t)} className="min-w-0 flex-1 text-left">
           <span className={`strike block text-[15px] leading-[21px] [overflow-wrap:anywhere] ${checked ? 'on text-muted' : 'text-ink'}`}>{t.text}</span>
-          {(t.due || t.owner || showNote) && (
+          {(t.due || t.owner || showNote || t.doing) && (
             <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
+              {t.doing && !checked && <span className="rounded-full bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] px-1.5 py-px text-[11px] font-medium text-accent-ink">In progress</span>}
               {t.due && !(t.dueFromDaily && state === 'today') && (
                 <span className={`inline-flex items-center gap-1 ${state === 'overdue' ? 'text-danger' : state === 'today' ? 'text-accent' : state === 'soon' ? 'text-ink-2' : 'text-muted'}`}>
                   <CalendarDays size={12} />{friendlyDue(t.due)}

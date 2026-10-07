@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
-  Archive, ArchiveRestore, ArrowDownUp, BookOpen, BookOpenText, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon,
-  Layers, Link2, Mic, PanelLeftOpen, Palette, Pin, RotateCcw, Search, Send, Settings as SettingsIcon, SquarePen, Sun, Tag, Trash2, X,
+  Archive, ArchiveRestore, ArrowDownUp, BookOpen, BookOpenText, CalendarCheck, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon,
+  Layers, Link2, Mic, PanelLeftOpen, Presentation, Palette, Pin, RotateCcw, Search, Send, Settings as SettingsIcon, SquarePen, Sun, Tag, Trash2, X,
 } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
@@ -19,17 +19,19 @@ import { PagesView } from './components/PagesView'
 import { receiveParcel, sendNotes, useParcelRequest } from './lib/parcelBus'
 import { Sidebar } from './components/Sidebar'
 import { TasksView } from './components/TasksView'
+import { WeeklyReview } from './components/WeeklyReview'
 import { JournalView } from './components/JournalView'
 import { TodayHero } from './components/TodayHero'
 import { LabelMenu, labelColor, registerLabels } from './components/LabelMenu'
 import { IconButton, MenuItem, Popover, Segmented } from './components/ui'
-import { addLabelToMany, createFromTemplate, createNote, db, deleteForever, emptyTrash, exportAll, openDaily, patchMany, setTrashed } from './lib/db'
-import { getDeviceName, setDeviceName } from './lib/device'
+import { addLabelToMany, createNote, db, deleteForever, emptyTrash, exportAll, openDaily, patchMany, setTrashed } from './lib/db'
 import { fileToDataUrl, pickFile } from './lib/image'
 import { putImage } from './lib/blobs'
 import { textToBlocks } from './lib/preview'
+import { todayKey } from './lib/templates'
 import { usePhone } from './lib/mobile'
 import { InstallHint } from './components/InstallHint'
+import { BackupReminder } from './components/BackupBits'
 import { Toaster } from './components/Toaster'
 import { toast } from './lib/toast'
 import { LIGHT_THEMES, THEMES, usePrefs } from './lib/prefs'
@@ -39,7 +41,9 @@ const ImportDialog = lazy(() => import('./components/ImportDialog'))
 // Dialogs load on first use, so the first screen only downloads what it shows.
 const CommandPalette = lazy(() => import('./components/CommandPalette').then((m) => ({ default: m.CommandPalette })))
 const SettingsDialog = lazy(() => import('./components/SettingsDialog').then((m) => ({ default: m.SettingsDialog })))
-const TemplatesDialog = lazy(() => import('./components/TemplatesDialog').then((m) => ({ default: m.TemplatesDialog })))
+const TemplateGallery = lazy(() => import('./components/TemplateGallery').then((m) => ({ default: m.TemplateGallery })))
+const DeckMaker = lazy(() => import('./components/DeckMaker').then((m) => ({ default: m.DeckMaker })))
+const ExportDialog = lazy(() => import('./components/ExportDialog').then((m) => ({ default: m.ExportDialog })))
 const ParcelHost = lazy(() => import('./components/ParcelDialogs').then((m) => ({ default: m.ParcelHost })))
 const NoteEditor = lazy(() => import('./components/NoteEditor').then((m) => ({ default: m.NoteEditor })))
 const CreateSheet = lazy(() => import('./components/CreateSheet').then((m) => ({ default: m.CreateSheet })))
@@ -74,7 +78,9 @@ const isTyping = () => { const a = document.activeElement as HTMLElement | null;
 
 export default function App() {
   const { prefs, set, dark } = usePrefs()
-  const notes = useLiveQuery(() => db.notes.toArray(), []) ?? NO_NOTES
+  // Template working copies (V6) are notes too, but never shown as notes.
+  const notes = useLiveQuery(() => db.notes.filter((n) => !n.templateDraft).toArray(), []) ?? NO_NOTES
+  const liveCount = useMemo(() => notes.filter((n) => n.trashedAt === null).length, [notes])
   const labels = useLiveQuery(() => db.labels.orderBy('name').toArray(), []) ?? NO_LABELS
   useMemo(() => registerLabels(labels), [labels])
   const [view, setViewRaw] = useState<View>({ kind: 'notes' })
@@ -83,6 +89,8 @@ export default function App() {
   const [palette, setPalette] = useState(false)
   const [settings, setSettings] = useState(false)
   const [templates, setTemplates] = useState(false)
+  const [deckMaker, setDeckMaker] = useState(false)
+  const [exporting, setExporting] = useState<null | import('./lib/exporter').Scope>(null)
   const [sidebar, setSidebar] = useState(true)
   const [drawer, setDrawer] = useState(false)
   const [menu, setMenu] = useState<null | 'sort' | 'phoneMenu' | 'bulkColor' | 'bulkLabel' | 'labelMenu'>(null)
@@ -90,7 +98,6 @@ export default function App() {
   const parcelReq = useParcelRequest()
   const openRef = useRef<string | null>(null)
   useEffect(() => { openRef.current = openId }, [openId])
-  const [deviceName, setName] = useState(getDeviceName)
   const [importing, setImporting] = useState<null | File[]>(null)
   const [dropHint, setDropHint] = useState(false)
   const [create, setCreate] = useState(false)
@@ -114,7 +121,8 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
   const openNote = useCallback((id: string) => {
-    setPalette(false); setDrawer(false); setSelected(new Set())
+    // opening a note closes whatever was in front of it (palette, gallery, maker…), so it's never hidden underneath
+    setPalette(false); setDrawer(false); setSelected(new Set()); setTemplates(false); setDeckMaker(false); setExporting(null)
     const replacing = !!(history.state as { note?: string } | null)?.note
     if (replacing) history.replaceState({ note: id }, '')
     else history.pushState({ note: id }, '')
@@ -141,7 +149,14 @@ export default function App() {
   }, [view]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const labelCtx = view.kind === 'label' ? [view.labelId] : []
-  const newNote = async () => openNote((await createNote({ labels: labelCtx })).id)
+  const newNote = async () => {
+    // V6: "Start every new note from this" template
+    if (((await db.meta.get('tplDefaults'))?.value as { new?: string | null } | undefined)?.new) {
+      const made = await import('./lib/templateKit').then((m) => m.newFromDefault({ labels: labelCtx })).catch(() => null)
+      if (made) return openNote(made.id)
+    }
+    openNote((await createNote({ labels: labelCtx })).id)
+  }
   const newList = async () => openNote((await createNote({ content: [{ type: 'checkListItem', props: { checked: false }, content: '' }], labels: labelCtx })).id)
   const today = async () => openNote((await openDaily()).id)
   const newPhoto = async () => {
@@ -154,7 +169,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette((p) => !p); return }
-      if (isTyping() || palette || settings || templates || recording || create) return
+      if (isTyping() || palette || settings || templates || recording || create || deckMaker || exporting) return
       if (e.key === 'Escape' && selected.size) setSelected(new Set())
       if (!openId && view.kind !== 'margins' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         if (e.key === 'c' || e.key === 'n') { e.preventDefault(); newNote() }
@@ -167,16 +182,26 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   })
 
+  // AI is a choice: decide once — on if a Groq key is already saved (existing users), off otherwise.
+  useEffect(() => {
+    if (prefs.ai !== null) return
+    import('./lib/voice').then((m) => m.getVoiceSettings(true)).then((v) => set({ ai: !!v.key })).catch(() => set({ ai: false }))
+  }, [prefs.ai]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const open = () => setSettings(true)
+    // after saving or discarding a template you were editing, land back in the gallery
+    const tpl = () => setTimeout(() => setTemplates(true), 250)
     document.addEventListener('folio:settings', open)
-    return () => document.removeEventListener('folio:settings', open)
+    document.addEventListener('folio:templates', tpl)
+    return () => { document.removeEventListener('folio:settings', open); document.removeEventListener('folio:templates', tpl) }
   }, [])
 
   // Housekeeping once the first screen is up (storage protection, image migration, repairs, cleanup).
   useEffect(() => {
     const run = () => {
       import('./lib/maintenance').then((m) => m.runMaintenance()).catch((e) => console.warn('[folio] maintenance', e))
+      import('./lib/backup').then((m) => m.autoBackup()).catch((e) => console.warn('[folio] auto backup', e))
       // Warm the editor so the first note opens instantly instead of waiting on a download.
       setTimeout(() => { void import('./components/NoteEditor') }, 600)
     }
@@ -265,13 +290,24 @@ export default function App() {
     for (const n of notes) if (n.parentId && n.trashedAt === null) m.set(n.parentId, (m.get(n.parentId) ?? 0) + 1)
     return m
   }, [notes])
-  const recents = useMemo(() => notes.filter((n) => n.trashedAt === null).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 10), [notes])
+  // Recents: the few notes you were just in (daily notes have Today/Journal, so they're left out)
+  const recents = useMemo(() => notes.filter((n) => n.trashedAt === null && !n.daily).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6), [notes])
   const labelCounts = useMemo(() => {
     const m: Record<string, number> = {}
     for (const n of notes) if (n.trashedAt === null) for (const l of n.labels) m[l] = (m[l] ?? 0) + 1
     return m
   }, [notes])
-  const openTasks = useMemo(() => notes.filter((n) => n.trashedAt === null && !n.locked).reduce((s, n) => s + n.checklist.filter((c) => !c.checked && c.text.trim()).length, 0), [notes])
+  // The badge counts what needs attention now (overdue + due today), not every open task.
+  const openTasks = useMemo(() => {
+    const today = todayKey()
+    let n = 0
+    for (const note of notes) if (note.trashedAt === null && !note.locked) for (const c of note.checklist) {
+      if (c.checked) continue
+      const m = c.text.match(/📅\s*(\d{4}-\d\d-\d\d)/)
+      if (m && m[1] <= today) n++
+    }
+    return n
+  }, [notes])
 
   const sorter = useCallback((a: Note, b: Note) => prefs.sort === 'custom' ? b.position - a.position : prefs.sort === 'created' ? b.createdAt - a.createdAt : prefs.sort === 'title' ? (a.title || '\uffff').localeCompare(b.title || '\uffff', undefined, { numeric: true, sensitivity: 'base' }) : b.updatedAt - a.updatedAt, [prefs.sort])
   const list: Note[] = useMemo(() => {
@@ -341,6 +377,7 @@ export default function App() {
     { id: 'go-journal', label: 'Go to Journal', icon: <BookOpen size={16} />, keywords: 'daily calendar diary', run: () => setView({ kind: 'journal' }) },
     { id: 'margins-open', label: 'Open a PDF in Margins…', icon: <BookOpenText size={16} />, keywords: 'pdf read reader book paper document margins', run: async () => { const { pickPdf } = await import('./lib/margins'); const r = await pickPdf(); if (r) openPdfFile(r) } },
     { id: 'go-margins', label: 'Go to Margins (PDF reader)', icon: <BookOpenText size={16} />, keywords: 'pdf read reader', run: () => setView({ kind: 'margins' }) },
+    { id: 'go-review', label: 'Weekly review', icon: <CalendarCheck size={16} />, keywords: 'week recap summary carry over', run: () => setView({ kind: 'review' }) },
     { id: 'go-tasks', label: 'Go to Tasks', icon: <CheckSquare size={16} />, keywords: 'todo checklist', run: () => setView({ kind: 'tasks' }) },
     { id: 'go-archive', label: 'Go to Archive', icon: <Archive size={16} />, run: () => setView({ kind: 'archive' }) },
     { id: 'go-trash', label: 'Go to Trash', icon: <Trash2 size={16} />, run: () => setView({ kind: 'trash' }) },
@@ -351,7 +388,9 @@ export default function App() {
     { id: 'cards', label: prefs.cardStyle === 'vivid' ? 'Use subtle card colours' : 'Use vivid card colours', icon: <Palette size={16} />, run: () => set({ cardStyle: prefs.cardStyle === 'vivid' ? 'subtle' : 'vivid' }) },
     { id: 'density', label: prefs.density === 'compact' ? 'Comfortable cards' : 'Compact cards', icon: <LayoutGrid size={16} />, run: () => set({ density: prefs.density === 'compact' ? 'comfortable' : 'compact' }) },
     { id: 'import-md', label: 'Import Markdown…', icon: <FileUp size={16} />, keywords: 'md markdown claude obsidian cherry import', run: () => setImporting([]) },
-    { id: 'export-md', label: 'Export all as Markdown (zip)', icon: <FileDown size={16} />, keywords: 'md markdown export zip', run: async () => { const { exportAllMarkdown } = await import('./lib/markdown'); exportAllMarkdown() } },
+    { id: 'export-all', label: 'Export notes…', icon: <FileDown size={16} />, keywords: 'export word docx pdf print markdown md html web text zip download', run: () => setExporting({ all: true }) },
+    { id: 'deck', label: 'Make a presentation…', icon: <Presentation size={16} />, keywords: 'slides deck powerpoint pptx present pitch ai pdf markdown', run: () => setDeckMaker(true) },
+    { id: 'templates', label: 'Manage templates', icon: <LayoutTemplate size={16} />, keywords: 'template gallery edit default', run: () => setTemplates(true) },
     { id: 'export', label: 'Export backup (JSON)', icon: <Download size={16} />, keywords: 'backup json', run: exportAll },
     { id: 'send-all', label: 'Share all notes as a link…', icon: <Send size={16} />, keywords: 'share send link transfer device', run: () => sendNotes('all') },
     { id: 'receive', label: 'Open a shared link…', icon: <Link2 size={16} />, keywords: 'receive import paste link', run: () => receiveParcel() },
@@ -359,12 +398,12 @@ export default function App() {
   ]
 
   const sidebarEl = (mobile?: boolean) => (
-    <Sidebar view={view} setView={setView} labels={labels} labelCounts={labelCounts} recents={recents} openTasks={openTasks} deviceName={deviceName} mobile={mobile}
+    <Sidebar view={view} setView={setView} labels={labels} labelCounts={labelCounts} recents={recents} openTasks={openTasks} name={prefs.name.trim()} noteCount={liveCount} mobile={mobile}
       onNew={() => { setDrawer(false); newNote() }} onToday={() => { setDrawer(false); today() }} onSearch={() => { setPalette(true); setDrawer(false) }} onOpen={openNote}
       onSettings={() => { setSettings(true); setDrawer(false) }} onCollapse={() => (mobile ? setDrawer(false) : setSidebar(false))} />
   )
   const sidebarShown = sidebar && !focus && !(reading && view.kind === 'margins' && !openId)
-  const inNotesArea = !['pages', 'tasks', 'journal'].includes(view.kind)
+  const inNotesArea = !['pages', 'tasks', 'journal', 'review'].includes(view.kind)
   const emptyText = { archive: 'Archived notes rest here', trash: 'Trash is empty', label: 'No notes with this label yet', notes: '' } as Record<string, string>
 
   return (
@@ -386,7 +425,7 @@ export default function App() {
       <main className="relative flex min-w-0 flex-1 flex-col">
         {/* The note opens on top; the list underneath stays put, so Back lands exactly where you were. */}
         {openId && (
-          <div className="absolute inset-0 z-10 flex flex-col">
+          <div className="note-layer absolute inset-0 z-10 flex flex-col">
             <Suspense fallback={<div className="editor-veil h-full" />}>
               <ErrorBoundary key={openId} area="editor" onBack={closeNote}>
                 <NoteEditor id={openId} initialNote={notes.find((n) => n.id === openId)} onClose={closeNote} onNavigate={openNote} focus={focus} setFocus={setFocus} />
@@ -427,6 +466,7 @@ export default function App() {
                   </>
                 ) : (
                   <>
+                    <IconButton label="Export" onClick={() => setExporting({ ids: sel })}><FileDown size={19} /></IconButton>
                     <IconButton label="Share as link" onClick={() => sendNotes(sel)}><Send size={19} /></IconButton>
                     <IconButton label="Stack as a series" onClick={() => { setStackIds(sel); setSelected(new Set()) }}><Layers size={19} /></IconButton>
                     <IconButton label="Pin / unpin" className="max-sm:hidden" onClick={() => bulk(() => patchMany(sel, { pinned: !sel.every((id) => notes.find((n) => n.id === id)?.pinned) }))}><Pin size={19} /></IconButton>
@@ -454,7 +494,7 @@ export default function App() {
                 <span className={`pl-1 ${sidebar ? 'lg:hidden' : ''} max-md:hidden md:max-lg:inline`}><Wordmark size={21} /></span>
                 {view.kind === 'notes' && !scrolled
                   ? <span className="pl-0.5 md:hidden"><Wordmark size={21} /></span>
-                  : <span className={`large-title-sm font-title min-w-0 truncate pl-1 text-[18px] font-semibold md:hidden ${view.kind !== 'notes' && !scrolled ? 'opacity-0' : ''}`}>{view.kind === 'pages' ? 'Pages' : view.kind === 'tasks' ? 'Tasks' : view.kind === 'journal' ? 'Journal' : view.kind === 'archive' ? 'Archive' : view.kind === 'trash' ? 'Trash' : view.kind === 'label' ? labelName : 'Notes'}</span>}
+                  : <span className={`large-title-sm font-title min-w-0 truncate pl-1 text-[18px] font-semibold md:hidden ${view.kind !== 'notes' && !scrolled ? 'opacity-0' : ''}`}>{view.kind === 'pages' ? 'Pages' : view.kind === 'tasks' ? 'Tasks' : view.kind === 'review' ? 'Weekly review' : view.kind === 'journal' ? 'Journal' : view.kind === 'archive' ? 'Archive' : view.kind === 'trash' ? 'Trash' : view.kind === 'label' ? labelName : 'Notes'}</span>}
 
                 <div className={`absolute left-1/2 -translate-x-1/2 max-lg:hidden ${sidebarShown ? 'hidden' : ''}`}>
                   <div className="flex rounded-full bg-surface p-1 text-[14px] font-medium">
@@ -510,12 +550,14 @@ export default function App() {
 
             <div ref={mainScroll} className="main-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-28 pt-2 sm:px-6 md:pb-16" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 44)} onClick={(e) => { if (e.target === e.currentTarget && selected.size) setSelected(new Set()) }}>
               {view.kind === 'pages' ? <div className="pt-4"><PagesView notes={notes} onOpen={openNote} /></div>
-                : view.kind === 'tasks' ? <div className="pt-4"><TasksView notes={notes} onOpen={openNote} /></div>
+                : view.kind === 'tasks' ? <div className="pt-4"><TasksView notes={notes} onOpen={openNote} onReview={() => setView({ kind: 'review' })} /></div>
+                : view.kind === 'review' ? <div className="pt-4"><WeeklyReview notes={notes} onOpen={openNote} /></div>
                 : view.kind === 'journal' ? <div className="pt-4"><JournalView notes={notes} onOpen={openNote} onSpeak={() => setRecording('journal')} /></div>
                 : (
                   <div className="mx-auto max-w-[1400px]">
                     {view.kind === 'notes' && <InstallHint />}
-                    {view.kind === 'notes' && <div className="pt-3 max-sm:pt-1"><TodayHero notes={notes} onOpenToday={today} onTasks={() => setView({ kind: 'tasks' })} onJournal={() => setRecording('journal')} onOpen={openNote} /></div>}
+                    {view.kind === 'notes' && <BackupReminder noteCount={notes.length} />}
+                    {view.kind === 'notes' && <div className="pt-3 max-sm:pt-1"><TodayHero notes={notes} onOpenToday={today} onReview={() => setView({ kind: 'review' })} onTasks={() => setView({ kind: 'tasks' })} onJournal={() => setRecording('journal')} onOpen={openNote} /></div>}
                     {showComposer && list.length === 0 && view.kind === 'notes' ? (
                       <div className="flex flex-col items-center justify-center gap-5 py-6">
                         <div className="w-full max-sm:hidden"><Composer onOpen={openNote} onTemplates={() => setTemplates(true)} onVoice={() => setRecording('memo')} /></div>
@@ -593,12 +635,14 @@ export default function App() {
       )}
       <Suspense fallback={null}>
         {palette && <CommandPalette notes={notes} commands={commands} onOpen={openNote} onClose={() => setPalette(false)} />}
-        {templates && <TemplatesDialog onClose={() => setTemplates(false)} onPick={async (t) => { setTemplates(false); openNote((await createFromTemplate(t, { labels: labelCtx })).id) }} />}
-        {settings && <SettingsDialog deviceName={deviceName} noteCount={notes.length} onClose={() => setSettings(false)} onRename={(n) => { setDeviceName(n); setName(n) }} onImport={() => setImporting([])} />}
+        {templates && <TemplateGallery labelIds={labelCtx} onClose={() => setTemplates(false)} onCreated={(id) => { setTemplates(false); openNote(id) }} onEdit={(id) => { setTemplates(false); openNote(id) }} />}
+        {exporting && <ExportDialog scope={exporting} onClose={() => setExporting(null)} />}
+        {deckMaker && <DeckMaker onClose={() => setDeckMaker(false)} onCreated={(id) => { setDeckMaker(false); openNote(id) }} />}
+        {settings && <SettingsDialog noteCount={liveCount} onClose={() => setSettings(false)} onImport={() => setImporting([])} onExport={() => { setSettings(false); setExporting({ all: true }) }} onTemplates={() => { setSettings(false); setTemplates(true) }} />}
         {parcelReq && <ParcelHost onOpenNote={openNote} />}
         {stackHint && <SeriesSheet ids={stackHint.ids} suggestion={stackHint.name} onClose={() => setStackHint(null)} />}
         {stackIds && <SeriesSheet ids={stackIds} onClose={() => setStackIds(null)} suggestion={labels.find((l) => stackIds.every((id) => notes.find((n) => n.id === id)?.labels.includes(l.id)))?.name} />}
-        {create && <CreateSheet onClose={() => setCreate(false)} onNote={newNote} onList={newList} onVoice={() => setRecording('memo')} onPhoto={newPhoto} onTemplate={() => setTemplates(true)} onToday={today} onLink={() => receiveParcel()} />}
+        {create && <CreateSheet onClose={() => setCreate(false)} onNote={newNote} onList={newList} onVoice={() => setRecording('memo')} onPhoto={newPhoto} onTemplate={() => setTemplates(true)} onToday={today} onLink={() => receiveParcel()} onDeck={() => setDeckMaker(true)} />}
         {recording && <VoiceRecorder journal={recording === 'journal'} labelIds={labelCtx} onClose={() => setRecording(false)} onSaved={(id) => { setRecording(false); openNote(id) }} />}
       </Suspense>
       {importing && (

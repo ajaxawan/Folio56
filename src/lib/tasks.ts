@@ -1,6 +1,6 @@
 // Tasks are ordinary checklist items inside notes — the note stays the single source of truth.
 // Extra details live as small, readable markers in the item's own text (portable to Markdown,
-// Obsidian Tasks style):   📅 2026-10-10  (due date)   ⭐ (starred)   @Ahmed or "Ahmed — …" (owner)
+// Obsidian Tasks style):   📅 2026-10-10  (due date)   ⭐ (starred)   🔄 (in progress)   @Ahmed or "Ahmed — …" (owner)
 // Voice-memo minutes also write "(due: Friday)", which is understood relative to the meeting date.
 
 import type { Note } from '../types'
@@ -23,6 +23,8 @@ export interface Task {
   dueFromDaily: boolean
   owner: string | null
   starred: boolean
+  /** in progress (🔄) — the Doing column on the board */
+  doing: boolean
   note: Note
 }
 
@@ -96,6 +98,7 @@ export const dueState = (k: string | null, now = new Date()): 'overdue' | 'today
 const RE_DUE = /\s*📅\s*(\d{4}-\d{2}-\d{2})/
 const RE_DUE_WORDS = /\s*\((?:due|by)[:\s]+([^)]+)\)/i
 const RE_STAR = /\s*⭐️?/g
+const RE_DOING = /\s*🔄\uFE0F?/g
 const RE_OWNER_DASH = /^\s*([A-Z][\p{L}.'-]*(?: [A-Z][\p{L}.'-]*){0,2})\s+[—–-]\s+/u
 const RE_OWNER_AT = /(^|\s)@([\p{L}][\p{L}0-9_.-]{0,30})/u
 
@@ -107,13 +110,14 @@ export function parseTask(raw: string, base: Date) {
   const m2 = text.match(RE_DUE_WORDS)
   if (m2) { const p = parseDate(m2[1], base); if (p) { due ??= keyOf(p.date) } text = text.replace(RE_DUE_WORDS, '') }
   const starred = /⭐/.test(text); text = text.replace(RE_STAR, '')
+  const doing = /🔄/.test(text); text = text.replace(RE_DOING, '')
   let owner: string | null = null
   const o1 = text.match(RE_OWNER_DASH)
   if (o1 && o1[1].toLowerCase() !== 'unassigned') owner = o1[1]
   if (o1) text = text.replace(RE_OWNER_DASH, '')
   const o2 = text.match(RE_OWNER_AT)
   if (o2) { owner ??= o2[2]; text = text.replace(RE_OWNER_AT, '$1').trim() }
-  return { text: text.replace(/\s{2,}/g, ' ').trim(), due, starred, owner }
+  return { text: text.replace(/\s{2,}/g, ' ').trim(), due, starred, owner, doing }
 }
 
 /** Every task in the library, with its details worked out. Locked and trashed notes are skipped. */
@@ -126,7 +130,7 @@ export function collectTasks(notes: Note[]): Task[] {
       if (!c.text.trim()) return
       const p = parseTask(c.text, base)
       const dueFromDaily = !p.due && !!n.daily
-      out.push({ noteId: n.id, index: i, raw: c.text, text: p.text || c.text, checked: c.checked, due: p.due ?? (n.daily || null), dueFromDaily, owner: p.owner, starred: p.starred, note: n })
+      out.push({ noteId: n.id, index: i, raw: c.text, text: p.text || c.text, checked: c.checked, due: p.due ?? (n.daily || null), dueFromDaily, owner: p.owner, starred: p.starred, doing: p.doing, note: n })
     })
   }
   return out
@@ -152,8 +156,8 @@ export function mapTask(blocks: Block[], n: number, fn: (b: Block) => Block | nu
 }
 
 /** Remove markers from the text runs of a block's content, keeping bold/italic etc. */
-function stripMarkers(content: Block[], what: { due?: boolean; star?: boolean }) {
-  return content.map((c) => (c.type === 'text' ? { ...c, text: c.text.replace(what.due ? RE_DUE : /$^/, '').replace(what.due ? RE_DUE_WORDS : /$^/, '').replace(what.star ? RE_STAR : /$^/, '') } : c))
+function stripMarkers(content: Block[], what: { due?: boolean; star?: boolean; doing?: boolean }) {
+  return content.map((c) => (c.type === 'text' ? { ...c, text: c.text.replace(what.due ? RE_DUE : /$^/, '').replace(what.due ? RE_DUE_WORDS : /$^/, '').replace(what.star ? RE_STAR : /$^/, '').replace(what.doing ? RE_DOING : /$^/, '') } : c))
     .filter((c) => c.type !== 'text' || c.text !== '')
 }
 const trimEnd = (content: Block[]) => { const c = [...content]; const last = c[c.length - 1]; if (last?.type === 'text') c[c.length - 1] = { ...last, text: last.text.replace(/\s+$/, '') }; return c }
@@ -170,15 +174,25 @@ export function setStar(blocks: Block[], n: number, on: boolean) {
     return { ...b, content: on ? [{ type: 'text', text: '⭐ ', styles: {} }, ...content] : content }
   })
 }
+/** Mark a task in progress (🔄 at the start) or not. */
+export function setDoing(blocks: Block[], n: number, on: boolean) {
+  return mapTask(blocks, n, (b) => {
+    const content = stripMarkers(asInline(b.content), { doing: true })
+    const first = content[0]
+    const lead = first?.type === 'text' ? [{ ...first, text: first.text.replace(/^\s+/, '') }, ...content.slice(1)] : content
+    return { ...b, content: on ? [{ type: 'text', text: '🔄 ', styles: {} }, ...lead] : lead }
+  })
+}
 export function setChecked(blocks: Block[], n: number, checked: boolean) {
   return mapTask(blocks, n, (b) => ({ ...b, props: { ...b.props, checked } }))
 }
 /** Replace the words of a task, keeping its markers (date, star). */
-export function setText(blocks: Block[], n: number, text: string, keep: { due: string | null; starred: boolean; explicitDue: boolean; owner: string | null }) {
+export function setText(blocks: Block[], n: number, text: string, keep: { due: string | null; starred: boolean; explicitDue: boolean; owner: string | null; doing?: boolean }) {
   const owner = keep.owner?.trim()
   return mapTask(blocks, n, (b) => ({
     ...b,
     content: [
+      ...(keep.doing ? [{ type: 'text', text: '🔄 ', styles: {} }] : []),
       ...(keep.starred ? [{ type: 'text', text: '⭐ ', styles: {} }] : []),
       ...(owner ? [{ type: 'text', text: owner, styles: { bold: true } }, { type: 'text', text: ' — ', styles: {} }] : []),
       { type: 'text', text: text.trim(), styles: {} },

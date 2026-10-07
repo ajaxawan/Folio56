@@ -2,11 +2,13 @@ import { AlertTriangle, CheckCheck, KeyRound, Loader2, Mic, RefreshCw, Sparkles 
 import { useEffect, useState } from 'react'
 import { applyFollowUp, getVoiceSettings, isProcessing, processMemo, saveVoiceSettings, STYLES, testKey } from '../lib/voice'
 import { patchNote } from '../lib/db'
+import { useAI } from '../lib/prefs'
 import type { Note } from '../types'
 
 /** Status strip at the top of a voice-memo page: working, needs a key, or failed (with retry). */
 export function MemoBanner({ note }: { note: Note }) {
   const m = note.memo
+  const ai = useAI()
   const [keyText, setKeyText] = useState('')
   const [msg, setMsg] = useState('')
   const [hasKey, setHasKey] = useState(true)
@@ -30,6 +32,8 @@ export function MemoBanner({ note }: { note: Note }) {
     )
   }
   if (!m || m.status === 'done') return null
+  // AI off: a recording is simply an audio note — no prompts, no nagging.
+  if (!ai && !isProcessing(note.id)) return null
   const working = (m.status === 'transcribing' || m.status === 'writing') && isProcessing(note.id)
   const stuck = (m.status === 'transcribing' || m.status === 'writing') && !isProcessing(note.id)
   const label = STYLES.find((s) => s.value === m.style)?.label ?? 'write-up'

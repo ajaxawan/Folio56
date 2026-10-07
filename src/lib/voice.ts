@@ -6,6 +6,7 @@ import { nanoid } from 'nanoid'
 import type { Memo, MemoStyle, Note } from '../types'
 import { REF } from './blobs'
 import { createNote, db, patchNote, snapshot, updateNote } from './db'
+import { aiOn } from './prefs'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -24,12 +25,15 @@ export interface VoiceSettings {
 }
 export const VOICE_DEFAULTS: VoiceSettings = { key: '', stt: 'whisper-large-v3', llm: 'openai/gpt-oss-120b', language: '', output: 'same', keepAudio: true, style: 'minutes' }
 // Stored in the meta table: never included in backups, exports or share links.
-export async function getVoiceSettings(): Promise<VoiceSettings> {
+// With AI switched off, Folio behaves as if no key were saved: recordings stay audio notes and
+// nothing is ever sent to Groq. (`raw` reads the stored key regardless, for the settings screen.)
+export async function getVoiceSettings(raw = false): Promise<VoiceSettings> {
   const row = await db.meta.get('voice')
-  return { ...VOICE_DEFAULTS, ...((row?.value as Partial<VoiceSettings>) ?? {}) }
+  const s = { ...VOICE_DEFAULTS, ...((row?.value as Partial<VoiceSettings>) ?? {}) }
+  return raw || aiOn() ? s : { ...s, key: '' }
 }
 export async function saveVoiceSettings(p: Partial<VoiceSettings>) {
-  const cur = await getVoiceSettings()
+  const cur = await getVoiceSettings(true)
   await db.meta.put({ key: 'voice', value: { ...cur, ...p } })
 }
 
@@ -444,6 +448,6 @@ export async function saveJournalEntry(segments: Blob[], duration: number, onPro
 /** One-off question to the user's Groq model (Margins: explain a passage, summarise a page, tidy text). */
 export async function askAI(system: string, user: string, maxTokens = 900, onWait?: (s: number) => void): Promise<string> {
   const s = await getVoiceSettings()
-  if (!s.key) throw new GroqError('Add your free Groq key in Settings → Voice & AI to use this.')
+  if (!s.key) throw new GroqError(aiOn() ? 'Add your free Groq key in Settings → AI to use this.' : 'AI features are off. You can turn them on in Settings → AI.')
   return chat([{ role: 'system', content: system }, { role: 'user', content: user }], s, maxTokens, onWait)
 }

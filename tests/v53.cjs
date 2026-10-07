@@ -51,7 +51,7 @@ const noOverflow = (p) => p.evaluate(() => document.scrollingElement.scrollWidth
   const errs = [];
   // ---------------- phone ----------------
   {
-    const ctx = await b.newContext({ ...devices['iPhone 14'], serviceWorkers: 'block', permissions: ['microphone'] });
+    const ctx = await b.newContext({ ...devices['iPhone 14'], serviceWorkers: 'block', permissions: ['microphone'] }); await ctx.addInitScript(() => { try { const k = 'folio.prefs'; const v = JSON.parse(localStorage.getItem(k) || '{}'); if (v.ai !== true) localStorage.setItem(k, JSON.stringify({ ...v, ai: true })) } catch {} }); // 5.9: AI is opt-in
     const groq = await mockGroq(ctx, { rateLimitOnce: true });
     const p = await ctx.newPage(); p.setDefaultTimeout(8000);
     p.on('pageerror', (e) => errs.push('phone: ' + e.message));
@@ -165,13 +165,13 @@ const noOverflow = (p) => p.evaluate(() => document.scrollingElement.scrollWidth
     await p.screenshot({ path: OUT + '/14-search.png' });
     await p.getByRole('button', { name: 'Cancel' }).click();
     await p.getByRole('button', { name: 'View options' }).click(); await p.getByText('Settings').click(); await p.waitForTimeout(400);
-    ok('phone: settings as sheet with Voice & AI', await p.getByText('Voice & AI').isVisible());
-    await p.getByText('Voice & AI').scrollIntoViewIfNeeded(); await p.screenshot({ path: OUT + '/15-settings-voice.png' });
+    ok('phone: settings as sheet with AI features', await p.getByText('AI features').first().isVisible());
+    await p.getByText('AI features').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: OUT + '/15-settings-voice.png' });
     await ctx.close();
   }
   // ---------------- no key + rejected key ----------------
   {
-    const ctx = await b.newContext({ viewport: { width: 1280, height: 860 }, serviceWorkers: 'block', permissions: ['microphone'] });
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 860 }, serviceWorkers: 'block', permissions: ['microphone'] }); await ctx.addInitScript(() => { try { const k = 'folio.prefs'; const v = JSON.parse(localStorage.getItem(k) || '{}'); if (v.ai !== true) localStorage.setItem(k, JSON.stringify({ ...v, ai: true })) } catch {} }); // 5.9: AI is opt-in
     await mockGroq(ctx, { reject: true });
     const p = await ctx.newPage(); p.setDefaultTimeout(8000);
     p.on('pageerror', (e) => errs.push('desktop: ' + e.message));

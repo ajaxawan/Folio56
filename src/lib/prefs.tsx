@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 
-export type ThemeKey = 'charcoal' | 'espresso' | 'moss' | 'arctic' | 'dusk' | 'midnight' | 'oled'
-export type LightThemeKey = 'paper' | 'mist'
+export type ThemeKey = 'charcoal' | 'graphite' | 'espresso' | 'ember' | 'moss' | 'arctic' | 'tide' | 'dusk' | 'plum' | 'midnight' | 'oled'
+export type LightThemeKey = 'paper' | 'linen' | 'blush' | 'sage' | 'mist' | 'fog'
 export type Mode = 'dark' | 'light' | 'auto'
 export type AccentKey = 'sky' | 'lavender' | 'teal' | 'sage' | 'amber' | 'peach' | 'rose'
 
@@ -34,15 +34,21 @@ export interface Prefs {
   wpGlass: number
   /** Accent picked from the wallpaper; overrides `accent` until a swatch is chosen. */
   accentHex: string | null
+  /** V5.9: AI features are a choice. null = not decided yet (on if a Groq key is already saved). */
+  ai: boolean | null
 }
 
 /** Dark-only, low-glare themes. Each suggests an accent that suits it. */
 export const THEMES: { key: ThemeKey; label: string; note: string; accent: AccentKey; swatch: [string, string, string] }[] = [
   { key: 'charcoal', label: 'Charcoal', note: 'Soft neutral grey', accent: 'sky', swatch: ['#141416', '#1f1f23', '#ececec'] },
+  { key: 'graphite', label: 'Graphite', note: 'Pure neutral grey', accent: 'teal', swatch: ['#161617', '#29292b', '#ebebeb'] },
   { key: 'espresso', label: 'Espresso', note: 'Warm coffee browns', accent: 'amber', swatch: ['#1a1512', '#2a221c', '#efe6dc'] },
+  { key: 'ember', label: 'Ember', note: 'Least blue light, for nights', accent: 'peach', swatch: ['#17110d', '#2d2219', '#f0e2d2'] },
   { key: 'moss', label: 'Moss', note: 'Calm forest greens', accent: 'sage', swatch: ['#151a16', '#222a23', '#e4e8dc'] },
   { key: 'arctic', label: 'Arctic', note: 'Cool slate blues', accent: 'teal', swatch: ['#242933', '#323846', '#eceff4'] },
+  { key: 'tide', label: 'Tide', note: 'Deep teal-navy', accent: 'teal', swatch: ['#0f1a1d', '#1f3135', '#e2eef0'] },
   { key: 'dusk', label: 'Dusk', note: 'Muted plum & rose', accent: 'rose', swatch: ['#191724', '#252336', '#e0def4'] },
+  { key: 'plum', label: 'Plum', note: 'Dark aubergine', accent: 'lavender', swatch: ['#1a1320', '#2e2338', '#ece2f2'] },
   { key: 'midnight', label: 'Midnight', note: 'Deep navy', accent: 'lavender', swatch: ['#070b14', '#152034', '#e6ecf7'] },
   { key: 'oled', label: 'OLED black', note: 'True black, max contrast', accent: 'sky', swatch: ['#000000', '#121212', '#ffffff'] },
 ]
@@ -50,7 +56,11 @@ export const THEMES: { key: ThemeKey; label: string; note: string; accent: Accen
 /** Muted light themes: off-white paper, never pure white; soft ink instead of black. */
 export const LIGHT_THEMES: { key: LightThemeKey; label: string; note: string; swatch: [string, string, string] }[] = [
   { key: 'paper', label: 'Paper', note: 'Warm off-white, soft ink', swatch: ['#f2efe7', '#f9f7f2', '#2b2823'] },
+  { key: 'linen', label: 'Linen', note: 'Soft cream', swatch: ['#f3ede2', '#faf6ef', '#2d2720'] },
+  { key: 'blush', label: 'Blush', note: 'Pale rose-sand', swatch: ['#f4ebe8', '#faf5f3', '#2e2524'] },
+  { key: 'sage', label: 'Sage', note: 'Calm green-grey', swatch: ['#eaeee6', '#f5f7f2', '#232a22'] },
   { key: 'mist', label: 'Mist', note: 'Cool grey-blue, calm', swatch: ['#edf0f3', '#f7f8fa', '#222831'] },
+  { key: 'fog', label: 'Fog', note: 'Almost colourless grey', swatch: ['#ececec', '#f6f6f6', '#242424'] },
 ]
 
 /** Soft, slightly desaturated accents that don't glare on dark backgrounds. */
@@ -68,7 +78,7 @@ const DEFAULTS: Prefs = {
   theme: 'charcoal', lightTheme: 'paper', mode: 'dark', accent: 'sky', titleFont: 'serif', name: '',
   cardStyle: 'vivid', density: 'comfortable', layout: 'grid', sort: 'custom',
   font: 'sans', textSize: 'md', width: 'narrow', typewriter: false, showCounts: true, candlelight: 'auto', grain: true, todayCollapsed: false,
-  wallpaper: 'none', wpDim: 0.5, wpBlur: 0, wpGlass: 0.72, accentHex: null,
+  wallpaper: 'none', wpDim: 0.5, wpBlur: 0, wpGlass: 0.72, accentHex: null, ai: null,
 }
 const KEY = 'folio.prefs'
 
@@ -124,6 +134,12 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const usePrefs = () => useContext(Ctx)
+/** Whether AI features are switched on. Everything AI-related is hidden when this is false. */
+// eslint-disable-next-line react-refresh/only-export-components
+export const useAI = () => useContext(Ctx).prefs.ai === true
+/** The same, for code outside React (voice memos, journal). */
+// eslint-disable-next-line react-refresh/only-export-components
+export const aiOn = () => { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}').ai === true } catch { return false } }
 
 export function greeting() {
   const h = new Date().getHours()

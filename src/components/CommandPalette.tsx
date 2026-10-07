@@ -5,6 +5,7 @@ import { swatch } from '../lib/colors'
 import { friendlyDate } from '../lib/device'
 import { usePrefs } from '../lib/prefs'
 import type { Note } from '../types'
+import { searchNotes, snippetFor, syncIndex } from '../lib/search'
 
 export interface Command { id: string; label: string; icon: ReactNode; hint?: string; keywords?: string; run: () => void }
 
@@ -17,18 +18,31 @@ export function CommandPalette({ notes, commands, onOpen, onClose }: { notes: No
   const listRef = useRef<HTMLDivElement>(null)
   const phone = isPhone()
 
-  // Lower-cased search text per note, built once per open (not on every keystroke).
-  const index = useMemo(() => notes.filter((n) => n.trashedAt === null).map((n) => ({ n, hay: `${n.title}\n${n.preview}\n${n.checklist.map((c) => c.text).join('\n')}`.toLowerCase() })), [notes])
-  const items: Item[] = useMemo(() => {
+  // Full-text, typo-tolerant, ranked search (built once, then kept in step with your notes).
+  const [ready, setReady] = useState(0)
+  useEffect(() => { let dead = false; syncIndex(notes).then(() => { if (!dead) setReady((r) => r + 1) }); return () => { dead = true } }, [notes])
+  const byId = useMemo(() => new Map(notes.map((n) => [n.id, n])), [notes])
+  const { items, terms } = useMemo(() => {
     const s = q.trim().toLowerCase()
     const words = s.split(/\s+/).filter(Boolean)
     const match = (h: string) => words.every((w) => h.includes(w))
     const cmds = commands.filter((c) => !s || match(`${c.label} ${c.keywords ?? ''}`.toLowerCase())).slice(0, s ? 6 : 8)
-    const found = (s ? index.filter((x) => match(x.hay)) : index).map((x) => x.n).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, s ? 25 : 6)
-    return s
+    let found: Note[]
+    let terms = new Map<string, string[]>()
+    if (s) {
+      const hits = searchNotes(s, 30)
+      terms = new Map(hits.map((h) => [h.id, h.terms]))
+      found = hits.map((h) => byId.get(h.id)).filter((n): n is Note => !!n && n.trashedAt === null)
+    } else found = notes.filter((n) => n.trashedAt === null).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6)
+    // An action whose name starts with what you typed ("export…", "new from template") comes first,
+    // unless a note is literally titled that.
+    const cmdFirst = !!s && cmds.some((c) => c.label.toLowerCase().startsWith(s)) && !found.some((n) => (n.title || '').toLowerCase().includes(s))
+    const items: Item[] = s && !cmdFirst
       ? [...found.map((note) => ({ kind: 'note' as const, note })), ...cmds.map((cmd) => ({ kind: 'cmd' as const, cmd }))]
       : [...cmds.map((cmd) => ({ kind: 'cmd' as const, cmd })), ...found.map((note) => ({ kind: 'note' as const, note }))]
-  }, [q, index, commands])
+    return { items, terms }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, byId, commands, ready])
 
   useEffect(() => setSel(0), [q])
   useEffect(() => { listRef.current?.querySelector(`[data-i="${sel}"]`)?.scrollIntoView({ block: 'nearest' }) }, [sel])
@@ -37,10 +51,8 @@ export function CommandPalette({ notes, commands, onOpen, onClose }: { notes: No
   const snippet = (n: Note) => {
     if (n.locked) return 'Locked'
     const text = (n.preview || n.checklist.map((c) => c.text).join(' · ')).replace(/[\u0001\u0002\u0003]/g, '')
-    const s = q.trim().toLowerCase().split(/\s+/)[0]
-    if (!s) return text.slice(0, 110)
-    const i = text.toLowerCase().indexOf(s)
-    return i < 0 ? text.slice(0, 110) : (i > 40 ? '…' : '') + text.slice(Math.max(0, i - 40), i + 90)
+    if (!q.trim()) return text.slice(0, 110)
+    return snippetFor(n, terms.get(n.id) ?? [], text.slice(0, 110))
   }
   const firstNote = items.findIndex((i) => i.kind === 'note')
   const firstCmd = items.findIndex((i) => i.kind === 'cmd')

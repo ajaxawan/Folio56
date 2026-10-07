@@ -71,7 +71,7 @@ const drop = (p, b64, name) => p.evaluate(([b64, name]) => {
     await p.getByRole('button', { name: 'More' }).first().click(); await p.waitForTimeout(200)
     ok('menus are solid (text behind never shows through)', (await p.locator('[data-popover]').first().evaluate((el) => getComputedStyle(el).backgroundColor)).match(/rgb\(|\/ 1\)|, 1\)$/) !== null)
     await p.keyboard.press('Escape'); await p.keyboard.press('Escape'); await p.waitForTimeout(400)
-    await p.getByText('This device').first().click(); await p.waitForTimeout(300)
+    await p.getByRole('complementary').getByRole('button', { name: /^Settings/ }).click(); await p.waitForTimeout(300)
     const bg = await p.locator('[role=dialog]').first().evaluate((el) => getComputedStyle(el).backgroundColor)
     ok('dialogs are solid', !/\/ 0\.\d+\)|, 0\.\d+\)$/.test(bg), bg)
     await p.keyboard.press('Escape')

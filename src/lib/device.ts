@@ -1,16 +1,24 @@
-const KEY = 'folio.deviceName'
-
-export function getDeviceName(): string {
-  try {
-    const v = localStorage.getItem(KEY)
-    if (v) return v
-  } catch { /* storage unavailable */ }
-  const ua = navigator.userAgent
-  return /Android/i.test(ua) ? (/Mobile/i.test(ua) ? 'Phone' : 'Tablet') : /iPad|iPhone/i.test(ua) ? 'iPhone' : 'Laptop'
+/** "Chrome on Windows", "Safari on iPhone"… — names a backup or a shared link without asking anyone to name their device. */
+export function browserLabel(): string {
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser'
+  const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) || (/Macintosh/.test(ua) && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1) ? 'iPad' : /Android/.test(ua) ? (/Mobile/.test(ua) ? 'Android phone' : 'Android tablet') : /Windows/.test(ua) ? 'Windows' : /Mac OS X|Macintosh/.test(ua) ? 'Mac' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : ''
+  return os ? `${browser} on ${os}` : browser
 }
 
-export function setDeviceName(name: string) {
-  try { localStorage.setItem(KEY, name) } catch { /* ignore */ }
+/** The person's name from Settings (one name for the whole app), falling back to the browser. */
+export function senderName(): string {
+  try { const n = (JSON.parse(localStorage.getItem('folio.prefs') ?? '{}').name ?? '').trim(); if (n) return n } catch { /* ignore */ }
+  return browserLabel()
+}
+
+/** "Zain Iqbal" → "Zain"; used by the greeting. */
+export const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? ''
+/** "Zain Iqbal" → "ZI", "zain" → "ZA". */
+export function initials(name: string) {
+  const w = name.trim().split(/\s+/).filter(Boolean)
+  if (!w.length) return ''
+  return (w.length > 1 ? w[0][0] + w[w.length - 1][0] : w[0].slice(0, 2)).toUpperCase()
 }
 
 export function timeAgo(t: number) {

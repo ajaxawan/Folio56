@@ -6,6 +6,7 @@ import { derive } from './preview'
 import { b64 as toB64, unb64 } from './crypto'
 import { collectRefs, externalize, inlineRefs, isData, isRef, REF, storeDataUrl, type StoredBlob } from './blobs'
 import { BUILTIN_TEMPLATES, dailyTitle, todayKey } from './templates'
+import { browserLabel } from './device'
 
 export const db = new Dexie('folio') as Dexie & {
   notes: EntityTable<Note, 'id'>
@@ -207,11 +208,14 @@ export async function thinAllHistory() {
 }
 
 // ---------- templates ----------
-export async function allTemplates(): Promise<Template[]> {
-  return [...BUILTIN_TEMPLATES, ...(await db.templates.toArray())]
-}
-export async function saveAsTemplate(n: Note, name: string) {
-  await db.templates.add({ id: nanoid(10), name, emoji: '📄', title: n.title, content: n.content })
+/** Every block list inside a template (its page and all sub-pages). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function templateContents(t: Template): any[][] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const out: any[][] = [t.content ?? []]
+  const walk = (ps?: Template['children']) => { for (const p of ps ?? []) { out.push(p.content ?? []); walk(p.children) } }
+  walk(t.children)
+  return out
 }
 export async function createFromTemplate(t: Template, extra: Partial<Note> = {}) {
   return createNote({ title: t.title, content: structuredClone(t.content), ...extra })
@@ -222,6 +226,12 @@ export async function openDaily(date = new Date()): Promise<Note> {
   const key = todayKey(date)
   const existing = await db.notes.where('daily').equals(key).filter((n) => n.trashedAt === null).first()
   if (existing) return existing
+  // V6: your own daily template, if you chose one (loaded only then, so "Today" stays instant otherwise)
+  const defaults = (await db.meta.get('tplDefaults'))?.value as { daily?: string | null } | undefined
+  if (defaults?.daily && defaults.daily !== 'tpl-daily') {
+    const made = await import('./templateKit').then((m) => m.dailyFromDefault(date)).catch(() => null)
+    if (made) return made
+  }
   const at = new Date(date); at.setHours(9, 0, 0, 0)
   const isToday = key === todayKey()
   return createFromTemplate(BUILTIN_TEMPLATES[0], { title: dailyTitle(date), daily: key, icon: '☀️', ...(isToday ? {} : { createdAt: at.getTime() }) })
@@ -257,12 +267,12 @@ export async function checkPasscode(pass: string) {
 export interface Backup { app: 'folio'; version: 2 | 3; exportedAt: string; device?: string; notes: Note[]; labels: Label[]; templates: Template[]; blobs?: { id: string; type: string; data: string }[] }
 
 /** Everything worth keeping, as one plain object (locked notes stay encrypted inside it). */
-export async function collectBackup(device?: string): Promise<Backup> {
-  const notes = await db.notes.toArray(), templates = await db.templates.toArray()
+export async function collectBackup(device = browserLabel()): Promise<Backup> {
+  const notes = (await db.notes.toArray()).filter((n) => !n.templateDraft), templates = await db.templates.toArray()
   // Images travel once each, base64-encoded, next to the notes that use them.
   const ids = new Set<string>()
   for (const n of notes) { collectRefs(n.content, ids); for (const u of [n.cover, n.image]) if (isRef(u)) ids.add(u.slice(REF.length)) }
-  for (const t of templates) collectRefs(t.content, ids)
+  for (const t of templates) { for (const b of templateContents(t)) collectRefs(b, ids); if (isRef(t.cover)) ids.add(t.cover.slice(REF.length)) }
   const blobs: NonNullable<Backup['blobs']> = []
   for (const id of ids) { const b = await db.blobs.get(id); if (b) blobs.push({ id, type: b.type, data: toB64(new Uint8Array(await b.blob.arrayBuffer())) }) }
   return { app: 'folio', version: 3, exportedAt: new Date().toISOString(), device, notes, labels: await db.labels.toArray(), templates, blobs }
@@ -270,6 +280,8 @@ export async function collectBackup(device?: string): Promise<Backup> {
 
 export async function exportAll() {
   download(`folio-backup-${todayKey()}.json`, new Blob([JSON.stringify(await collectBackup())], { type: 'application/json' }))
+  await db.meta.put({ key: 'lastBackup', value: Date.now() })
+  document.dispatchEvent(new CustomEvent('folio:backup'))
 }
 export function download(name: string, blob: Blob) {
   const a = document.createElement('a')
@@ -284,9 +296,15 @@ export async function mergeBackup(data: Partial<Backup>) {
   let changed = 0
   const pending = new Map<string, StoredBlob>()
   for (const b of data.blobs ?? []) { const blob = new Blob([unb64(b.data) as BlobPart], { type: b.type }); pending.set(b.id, { id: b.id, blob, type: b.type, size: blob.size, at: Date.now() }) }
-  await db.transaction('rw', [db.notes, db.labels, db.templates, db.blobs], async () => {
+  await db.transaction('rw', [db.notes, db.labels, db.templates as never, db.blobs], async () => {
     await db.labels.bulkPut(data.labels ?? [])
-    await db.templates.bulkPut((data.templates ?? []).map((t) => ({ ...t, content: externalize(t.content, pending) })))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pages = (ps?: Template['children']): Template['children'] => ps?.map((p) => ({ ...p, content: externalize(p.content, pending), children: pages(p.children) }))
+    for (const t of (data.templates ?? []) as Template[]) {
+      const cur = await db.templates.get(t.id)
+      if (cur && (cur.updatedAt ?? 0) > (t.updatedAt ?? 0)) continue // newer here wins
+      await db.templates.put({ ...t, content: externalize(t.content, pending), children: pages(t.children), cover: isData(t.cover) ? storeDataUrl(t.cover, pending) : t.cover })
+    }
     for (const raw of (data.notes ?? []) as Note[]) {
       const defaults: Partial<Note> = { position: raw.updatedAt, locked: false, cipher: null, daily: null, words: 0 }
       const n = { ...defaults, ...raw } as Note

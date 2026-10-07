@@ -18,6 +18,8 @@ export const HL_COLORS: Record<HighlightColor, string> = { amber: '#f5b84d', gre
 
 export interface PdfRecord {
   fp: string
+  /** The note made for this PDF (notes can also go into another note you choose). */
+  ownId?: string | null
   name: string
   title: string
   size: number

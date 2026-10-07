@@ -38,6 +38,10 @@ export interface Note {
   memo?: Memo
   /** Series / stack name (V5.4): recurring meetings, numbered docs… shown as one stacked card. */
   series?: string | null
+  /** V6: this note is a working copy of a template being edited (id of the template). Hidden everywhere else. */
+  templateDraft?: string | null
+  /** V6.1: this note is a presentation (slides + theme); its content mirrors the slides as an outline. */
+  deck?: import('./lib/deck').Deck | null
 }
 
 export type MemoStyle = 'minutes' | 'memo' | 'transcript' | 'journal'
@@ -76,14 +80,39 @@ export interface Version {
   words: number
 }
 
+/** A sub-page inside a multi-page template. */
+export interface TemplatePage {
+  title: string
+  icon?: string | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  content: any[]
+  children?: TemplatePage[]
+}
+
 export interface Template {
   id: string
   name: string
   emoji: string
+  /** Title of the new note; may hold {{variables}} and {{fields}}. */
   title: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   content: any[]
   builtin?: boolean
+  // ---- V6 ----
+  category?: string
+  description?: string
+  /** Look of the note it creates. */
+  color?: ColorKey
+  icon?: string | null
+  cover?: string | null
+  paper?: Paper
+  labels?: string[]
+  /** Sub-pages created under the new note. */
+  children?: TemplatePage[]
+  createdAt?: number
+  updatedAt?: number
+  /** Made just now to be edited (blank, or a copy of a built-in); discarding the edit removes it. */
+  fresh?: boolean
 }
 
 export type View =
@@ -92,6 +121,7 @@ export type View =
   | { kind: 'tasks' }
   | { kind: 'journal' }
   | { kind: 'margins' }
+  | { kind: 'review' }
   | { kind: 'archive' }
   | { kind: 'trash' }
   | { kind: 'label'; labelId: string }

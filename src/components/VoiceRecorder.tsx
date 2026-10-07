@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { isIOS, isPhone } from '../lib/mobile'
 import { SegmentRecorder } from '../lib/recorder'
+import { useAI } from '../lib/prefs'
 import { getVoiceSettings, saveJournalEntry, saveRecording, saveVoiceSettings, STYLES, testKey } from '../lib/voice'
 import type { MemoStyle } from '../types'
 import { SeriesPicker } from './SeriesSheet'
@@ -13,6 +14,7 @@ const clock = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor((s
 export function VoiceRecorder({ labelIds, onClose, onSaved, journal }: { labelIds: string[]; onClose: () => void; onSaved: (id: string) => void; journal?: boolean }) {
   const rec = useRef<SegmentRecorder | null>(null)
   const [, force] = useState(0)
+  const ai = useAI()
   const [style, setStyle] = useState<MemoStyle>('minutes')
   const [series, setSeries] = useState<string | null>(null)
   const [hasKey, setHasKey] = useState<boolean | null>(null)
@@ -100,7 +102,7 @@ export function VoiceRecorder({ labelIds, onClose, onSaved, journal }: { labelId
     stopMeter(); void wake.current?.release().catch(() => {})
     if (!parts.length || secs < 1) { setSaving(false); setError('Nothing was recorded.'); rec.current = null; return }
     if (journal) { const d = await saveJournalEntry(parts, secs, setProgress); onSaved(d.id); return }
-    const note = await saveRecording(parts, secs, style, labelIds, style === 'transcript' ? null : series)
+    const note = await saveRecording(parts, secs, style, labelIds, !ai || style === 'transcript' ? null : series)
     onSaved(note.id)
   }
   const discard = () => {
@@ -130,8 +132,9 @@ export function VoiceRecorder({ labelIds, onClose, onSaved, journal }: { labelId
 
         {state === 'idle' && (
           <>
-            {journal && <p className="mt-4 max-w-xs text-center text-[14px] leading-6 text-ink-2">Talk about your day. Folio writes it up in your own voice and adds it to today’s note — to-dos become tasks.</p>}
-            <div className={`mt-4 w-full max-w-sm space-y-1.5 ${journal ? 'hidden' : ''}`} role="radiogroup" aria-label="What to make from it">
+            {journal && <p className="mt-4 max-w-xs text-center text-[14px] leading-6 text-ink-2">{ai ? 'Talk about your day. Folio writes it up in your own voice and adds it to today’s note — to-dos become tasks.' : 'Talk about your day. The recording is added to today’s note.'}</p>}
+            {!ai && !journal && <p className="mt-4 max-w-xs text-center text-[14px] leading-6 text-ink-2">The recording is saved as an audio note you can play back, title and label.</p>}
+            <div className={`mt-4 w-full max-w-sm space-y-1.5 ${journal || !ai ? 'hidden' : ''}`} role="radiogroup" aria-label="What to make from it">
               {STYLES.map((s) => (
                 <button key={s.value} type="button" role="radio" aria-checked={style === s.value} onClick={() => setStyle(s.value)}
                   className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-2.5 text-left transition-colors ${style === s.value ? 'border-accent bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]' : 'border-line hover:border-muted/60'}`}>
@@ -140,14 +143,14 @@ export function VoiceRecorder({ labelIds, onClose, onSaved, journal }: { labelId
                 </button>
               ))}
             </div>
-            {style === 'minutes' && !journal && (
+            {ai && style === 'minutes' && !journal && (
               <div className="mt-3 w-full max-w-sm">
                 <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-[.08em] text-faint">Recurring meeting?</div>
                 <SeriesPicker value={series} onChange={setSeries} />
                 {series && <p className="mt-1.5 text-[12px] leading-4 text-muted">Folio will check last time's open action items against this meeting.</p>}
               </div>
             )}
-            {hasKey === false && (
+            {ai && hasKey === false && (
               <div className="mt-3 w-full max-w-sm rounded-2xl bg-wash p-3 text-[12.5px] leading-5 text-muted">
                 {!keyOpen ? (
                   <>Without a Groq key, Folio keeps the audio only. <button type="button" onClick={() => setKeyOpen(true)} className="font-medium text-accent">Add a free key</button> to get the write-up.</>
@@ -189,7 +192,7 @@ export function VoiceRecorder({ labelIds, onClose, onSaved, journal }: { labelId
           </>
         )}
       </div>
-      {(live || state === 'interrupted') && <p className="pb-2 text-center text-[12px] text-faint">{saving ? (progress || 'Saving…') : journal ? 'Tap ✓ to add it to today' : `Tap ✓ to save · ${STYLES.find((s) => s.value === style)?.label}`}</p>}
+      {(live || state === 'interrupted') && <p className="pb-2 text-center text-[12px] text-faint">{saving ? (progress || 'Saving…') : journal ? 'Tap ✓ to add it to today' : !ai ? 'Tap ✓ to save the recording' : `Tap ✓ to save · ${STYLES.find((s) => s.value === style)?.label}`}</p>}
     </div>
   )
 

@@ -13,7 +13,7 @@ export function VoicePanel() {
   const [key, setKey] = useState('')
   const [show, setShow] = useState(false)
   const [msg, setMsg] = useState('')
-  useEffect(() => { getVoiceSettings().then((v) => { setS(v); setKey(v.key) }) }, [])
+  useEffect(() => { getVoiceSettings(true).then((v) => { setS(v); setKey(v.key) }) }, [])
   const set = (p: Partial<VoiceSettings>) => { setS((x) => ({ ...x, ...p })); saveVoiceSettings(p) }
   const check = async () => {
     const k = key.trim(); if (!k) { set({ key: '' }); setMsg('Key removed. Recordings will be saved as audio only.'); return }
@@ -24,9 +24,8 @@ export function VoicePanel() {
   return (
     <div className="space-y-3">
       <p className="text-[12.5px] leading-5 text-muted">
-        Record voice memos and meetings, then turn them — or any rough notes — into clean Markdown and meeting minutes.
-        Uses <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-accent underline">Groq’s free API</a> with your own key (no card needed).
-        Audio or text goes to Groq only when you ask for a write-up; everything else stays on this device.
+        Get a free key at <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-accent underline">console.groq.com</a> (no card needed).
+        Audio or text goes to Groq only when you ask for a write-up.
       </p>
       <div>
         <div className="flex gap-2">

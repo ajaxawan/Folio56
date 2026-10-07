@@ -190,7 +190,9 @@ async function openNote(p, title) { await p.locator('article', { hasText: title 
 
   await check('templates: create from template', p, async () => {
     await p.getByRole('button', { name: 'From template' }).click(); await p.waitForTimeout(400);
-    await p.locator('[role=dialog] button').filter({ hasText: /Meeting/i }).first().click(); await p.locator('.bn-editor').waitFor(); await p.waitForTimeout(600);
+    // V6 gallery: pick a template to preview it, then create
+    await p.getByRole('dialog', { name: 'Templates' }).getByRole('button', { name: 'Meeting minutes', exact: true }).click(); await p.waitForTimeout(300);
+    await p.getByRole('dialog', { name: 'Templates' }).getByRole('button', { name: 'Create note' }).click(); await p.locator('.bn-editor').waitFor(); await p.waitForTimeout(600);
     expect(await p.locator('.bn-editor').innerText().then((t) => t.length > 20), 'template empty');
     await p.getByPlaceholder('Untitled').fill('QA meeting'); await p.waitForTimeout(700); await closeEditor(p);
   });
@@ -230,8 +232,10 @@ async function openNote(p, title) { await p.locator('article', { hasText: title 
   });
 
   await check('markdown export zip contains images', p, async () => {
-    await p.keyboard.press('Control+k'); await p.getByPlaceholder('Search notes or type a command…').fill('export all as markdown');
-    const [dl] = await Promise.all([p.waitForEvent('download'), p.keyboard.press('Enter')]);
+    // V6: one Export dialog for every format
+    await p.keyboard.press('Control+k'); await p.getByPlaceholder('Search notes or type a command…').fill('export notes'); await p.waitForTimeout(300); await p.keyboard.press('Enter'); await p.waitForTimeout(500);
+    await p.getByRole('radio', { name: /^Markdown/ }).click();
+    const [dl] = await Promise.all([p.waitForEvent('download'), p.getByRole('button', { name: 'Export .md' }).click()]);
     const f = `${OUT}/export.zip`; await dl.saveAs(f);
     const { execSync } = require('child_process'); const list = execSync(`unzip -l "${f}"`).toString();
     expect(/assets\/image-\d+\.(jpg|jpeg|png|webp)/.test(list), 'no images in zip');
@@ -305,8 +309,9 @@ async function openNote(p, title) { await p.locator('article', { hasText: title 
   const d2 = await ctx({ tag: 'tablet', viewport: { width: 800, height: 1280 }, isMobile: true, hasTouch: true });
   await check('tablet: import backup restores notes + images', d2.p, async () => {
     await d2.p.evaluate(() => {}); await openSettings(d2.p);
-    const [fc] = await Promise.all([d2.p.waitForEvent('filechooser'), d2.p.getByRole('button', { name: /^Import$/ }).click()]);
-    await fc.setFiles(backupFile); await d2.p.waitForTimeout(1500); await d2.p.keyboard.press('Escape'); await d2.p.waitForTimeout(600);
+    const [fc] = await Promise.all([d2.p.waitForEvent('filechooser'), d2.p.getByRole('button', { name: /^Restore…$/ }).click()]);
+    await fc.setFiles(backupFile); await d2.p.waitForTimeout(800); // 5.9: a preview comes first
+    await d2.p.getByRole('button', { name: /^Restore \d+ notes?$/ }).click(); await d2.p.waitForTimeout(1500); await d2.p.keyboard.press('Escape'); await d2.p.waitForTimeout(600);
     const blobs = await dbAll(d2.p, 'blobs'); expect(blobs.length > 0, 'no images restored');
     expect(await imgLoaded(d2.p, 'article img'), 'restored image not displayed');
     await d2.p.screenshot({ path: `${OUT}/06-tablet.png` });

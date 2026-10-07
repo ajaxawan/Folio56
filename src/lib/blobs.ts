@@ -134,7 +134,11 @@ export async function usedIds() {
   const add = (u?: string | null) => { if (isRef(u)) used.add(u.slice(REF.length)) }
   await db.notes.each((n) => { collectRefs(n.content, used); add(n.cover); add(n.image) })
   await db.versions.each((v) => { collectRefs(v.content, used) })
-  await db.templates.each((t) => { collectRefs(t.content, used) })
+  await db.templates.each((t) => {
+    collectRefs(t.content, used); add(t.cover)
+    const walk = (ps?: { content: Block[]; children?: unknown[] }[]) => { for (const p of ps ?? []) { collectRefs(p.content, used); walk(p.children as never) } }
+    walk(t.children as never)
+  })
   return used
 }
 
@@ -171,7 +175,7 @@ export async function migrateInlineImages() {
     const versions = await db.versions.toArray()
     for (const v of versions) { const content = fix(v.content); if (content !== v.content) await db.versions.update(v.id, { content }) }
     const templates = await db.templates.toArray()
-    for (const t of templates) { const content = fix(t.content); if (content !== t.content) await db.templates.update(t.id, { content }) }
+    for (const t of templates) { const content = fix(t.content); if (content !== t.content) await db.templates.put({ ...t, content }) }
     await db.blobs.bulkPut([...pending.values()])
     await db.meta.put({ key: 'imagesMigrated', value: Date.now() })
   })
