@@ -1,7 +1,7 @@
 // V5.6 checks: light mode (Paper/Mist) contrast + switching, Auto follows the device, calm writing, A–Z sort, no tracking widgets.
 const { chromium } = require('playwright');
 const fs = require('fs');
-const URL = 'http://localhost:4174';
+const URL = 'http://localhost:4174/app';
 const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const results = []; const ok = (n, p, i = '') => { results.push({ n, p: !!p }); console.log(p ? 'PASS' : 'FAIL', n, i) };
 (async () => {

@@ -60,7 +60,7 @@ function ThemePicker() {
   )
 }
 
-export function SettingsDialog({ onClose, noteCount, onImport, onExport, onTemplates }: { onClose: () => void; noteCount: number; onImport: () => void; onExport: () => void; onTemplates: () => void }) {
+export function SettingsDialog({ onClose, noteCount, onImport, onExport, onTemplates, onWelcome }: { onClose: () => void; noteCount: number; onImport: () => void; onExport: () => void; onTemplates: () => void; onWelcome: () => void }) {
   const { prefs, set } = usePrefs()
   const [usage, setUsage] = useState('')
   const [msg, setMsg] = useState('')
@@ -164,6 +164,13 @@ export function SettingsDialog({ onClose, noteCount, onImport, onExport, onTempl
         <div className="flex gap-2">
           <button type="button" onClick={() => { onClose(); sendNotes('all') }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-wash px-3 py-2.5 text-[14px] hover:bg-wash-2"><Send size={16} /> Share all</button>
           <button type="button" onClick={() => { onClose(); receiveParcel() }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-wash px-3 py-2.5 text-[14px] hover:bg-wash-2"><Link2 size={16} /> Open a link</button>
+        </div>
+      </Row>
+      <Row label="About">
+        <div className="flex flex-wrap items-center gap-2 text-[13.5px]">
+          <span className="mr-auto text-ink-2">Folio56 <span className="tabular-nums text-muted">{__APP_VERSION__}</span></span>
+          <button type="button" onClick={() => { onClose(); onWelcome() }} className="rounded-lg bg-wash px-3 py-2 hover:bg-wash-2">Show the welcome guide</button>
+          <a href="/welcome" target="_blank" rel="noopener" className="rounded-lg bg-wash px-3 py-2 hover:bg-wash-2">About Folio56 ↗</a>
         </div>
       </Row>
       {dialog && <PasscodeDialog mode={pass ? 'enter' : 'set'} onCancel={() => setDialog(false)} onDone={() => { setDialog(false); setPass(true); setMsg('Passcode ready. Locked notes open for this session.') }} />}

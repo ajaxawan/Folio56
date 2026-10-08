@@ -3,7 +3,7 @@
 // usage: node metrics.js <label> [notes=2000]
 const { chromium } = require('playwright');
 const fs = require('fs'); const path = require('path'); const zlib = require('zlib');
-const URL = 'http://localhost:4174';
+const URL = 'http://localhost:4174/app';
 const label = process.argv[2] || 'run'; const N = Number(process.argv[3] || 2000);
 const DIST = require('path').join(__dirname, '..', 'dist');
 const PHOTO = fs.readFileSync(__dirname + '/photo.jpg').toString('base64');

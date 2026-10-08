@@ -1,20 +1,567 @@
 <!doctype html>
-<html lang="en" data-theme="charcoal" data-mode="dark" data-titlefont="serif">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#141416" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Folio56" />
-    <meta name="format-detection" content="telephone=no" />
-    <title>Folio56</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<html lang="en" data-theme="espresso">
+<head>
+<meta charset="utf-8">
+<script>
+/* Returning visitors, installed apps and old links go straight into the app. /welcome always shows this page. */
+(function(){
+  var l=location, d=document.documentElement;
+  if(l.pathname.indexOf('/welcome')===0) return;
+  if(l.pathname.indexOf('/app')===0) return l.replace('/app/'+l.search+l.hash);
+  var go=function(){ l.replace('/app/'+l.search+l.hash) };
+  if(/^#p=/.test(l.hash) || /[?&](new|task|record|today|view|add|text|url|title)=/.test(l.search)) return go();
+  try{ if(localStorage.getItem('folio.app') || localStorage.getItem('folio.prefs')) return go() }catch(e){}
+  if(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)) return go();
+  if(!indexedDB || !indexedDB.databases) return;
+  d.className+=' checking';
+  var shown=false, show=function(){ if(!shown){ shown=true; d.className=d.className.replace(' checking','') } };
+  setTimeout(show,700);
+  indexedDB.databases().then(function(a){ for(var i=0;i<a.length;i++) if(a[i].name==='folio') return go(); show() }, show);
+})();
+</script>
+<style>.checking body{visibility:hidden}</style>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Folio56 — private notes that stay on your device</title>
+<meta name="description" content="A calm, private notes app that runs in your browser. Write, plan, read PDFs and make presentations — offline, with no account and no sync.">
+<meta name="theme-color" content="#1a1512">
+<meta property="og:title" content="Folio56 — your notes, on your device">
+<meta property="og:description" content="Private, offline notes in your browser. No account, no sync, AI only if you ask.">
+<meta property="og:image" content="/welcome/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" href="/welcome/newsreader-latin-wght-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/welcome/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Newsreader";font-style:italic;font-weight:200 800;font-display:swap;src:url(/welcome/newsreader-latin-wght-italic.woff2) format("woff2")}
+@font-face{font-family:"Newsreader";font-style:normal;font-weight:200 800;font-display:swap;src:url(/welcome/newsreader-latin-wght-normal.woff2) format("woff2")}
+@font-face{font-family:"Geist";font-weight:100 900;font-display:swap;src:url(/welcome/geist-latin-wght-normal.woff2) format("woff2")}
+
+/* ── Tokens: the app's own themes. Espresso + amber by default; the theme picker swaps these live. ── */
+:root{
+  --canvas:#1a1512; --surface:#261f1a; --card:#221b17; --raised:#30271f; --line:#3b3028;
+  --ink:#efe6dc; --ink-2:#dacdbe; --muted:#aa9a8a; --faint:#988877;
+  --accent:#f0b35e; --accent-ink:#f0b35e; --on-accent:#1a1410;
+  --wash:rgb(255 225 190 / .07); --hi:rgb(255 230 200 / .06);
+  --glass:color-mix(in srgb,var(--raised) 62%,transparent);
+  --serif:"Newsreader","Iowan Old Style",Georgia,serif;
+  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --ease:cubic-bezier(.2,.8,.2,1); --spring:cubic-bezier(.34,1.4,.64,1);
+  --r-sm:10px; --r:16px; --r-lg:24px;
+  --step-0:clamp(16px,.35vw + 15px,17.5px);
+  --step-1:clamp(18px,.5vw + 16px,20px);
+  --step-3:clamp(30px,2.4vw + 18px,44px);
+  --step-4:clamp(38px,3.6vw + 20px,64px);
+  --step-5:clamp(46px,5vw + 16px,88px);
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:96px}
+body{margin:0;background:var(--canvas);color:var(--ink);font:400 var(--step-0)/1.6 var(--sans);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;transition:background .5s var(--ease),color .5s var(--ease)}
+img{max-width:100%;height:auto;display:block}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+.skip{position:absolute;left:12px;top:-60px;z-index:99;background:var(--accent);color:var(--on-accent);padding:10px 14px;border-radius:10px;font-weight:600}
+.skip:focus{top:12px}
+.wrap{width:min(1200px,100% - 48px);margin-inline:auto}
+h1,h2,h3{text-wrap:balance;margin:0}
+p{text-wrap:pretty}
+.ico{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* soft grain, like the app's paper option */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:100;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* wordmark */
+.wm{display:inline-flex;align-items:flex-start;line-height:1;font-family:var(--serif);font-style:italic}
+.wm b{font-weight:500;font-size:25px;letter-spacing:-.02em;color:var(--ink)}
+.wm i{font-weight:650;font-size:14px;color:var(--accent-ink);margin-left:2px;margin-top:-1px}
+
+/* glass surface — the app's frosted panels */
+.glass{background:var(--glass);-webkit-backdrop-filter:blur(20px) saturate(150%);backdrop-filter:blur(20px) saturate(150%);border:1px solid color-mix(in srgb,var(--ink) 11%,transparent);box-shadow:inset 0 1px 0 var(--hi),0 24px 60px -28px rgb(0 0 0 / .7)}
+
+/* ── Floating pill nav ── */
+.nav{position:fixed;top:14px;left:50%;translate:-50% 0;z-index:50;width:min(940px,100% - 24px);display:flex;align-items:center;gap:8px;padding:8px 8px 8px 20px;border-radius:999px;transition:padding .3s var(--ease),width .3s var(--ease)}
+.nav.scrolled{width:min(820px,100% - 24px)}
+/* denser than other glass so its text stays readable over the light privacy band */
+.nav.glass{background:color-mix(in srgb,var(--canvas) 86%,transparent)}
+.nav .links{display:flex;gap:2px;margin-left:18px}
+.nav .links a{font-size:14px;color:var(--muted);padding:7px 12px;border-radius:999px;transition:color .2s,background .2s}
+.nav .links a:hover{color:var(--ink);background:var(--wash)}
+.nav .end{margin-left:auto;display:flex;gap:6px;align-items:center}
+.dot-btn{width:36px;height:36px;border-radius:999px;display:grid;place-items:center;border:0;background:transparent;color:var(--muted);cursor:pointer}
+.dot-btn:hover{background:var(--wash);color:var(--ink)}
+.dot-btn span{width:16px;height:16px;border-radius:50%;background:conic-gradient(var(--accent) 0 50%,var(--ink) 0);box-shadow:0 0 0 2px var(--canvas),0 0 0 3px var(--line)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;font:600 15px/1 var(--sans);padding:14px 22px;border:0;cursor:pointer;transition:transform .25s var(--spring),background .2s,box-shadow .25s}
+.btn .ico{width:16px;height:16px;transition:transform .25s var(--spring)}
+.btn:hover .ico{transform:translateX(3px)}
+.btn.primary{background:var(--accent);color:var(--on-accent);box-shadow:inset 0 1px 0 rgb(255 255 255 / .35),0 10px 30px -12px color-mix(in srgb,var(--accent) 80%,transparent)}
+.btn.primary:hover{transform:translateY(-1px);box-shadow:inset 0 1px 0 rgb(255 255 255 / .35),0 16px 40px -14px color-mix(in srgb,var(--accent) 90%,transparent)}
+.btn.primary:active{transform:scale(.98)}
+.btn.ghost{color:var(--ink);background:var(--wash);box-shadow:inset 0 0 0 1px var(--line)}
+.btn.ghost:hover{background:color-mix(in srgb,var(--ink) 10%,transparent)}
+.btn.sm{padding:10px 16px;font-size:14px}
+
+/* ── Hero ── */
+.hero{position:relative;overflow-x:clip;padding:128px 0 0;text-align:center;isolation:isolate}
+.aura{position:absolute;inset:-120px 0 auto;height:900px;z-index:-1;pointer-events:none;
+  background:radial-gradient(40% 40% at 50% 28%,color-mix(in srgb,var(--accent) 20%,transparent),transparent 70%),
+             radial-gradient(30% 30% at 22% 46%,color-mix(in srgb,var(--accent) 8%,transparent),transparent 70%),
+             radial-gradient(30% 30% at 80% 50%,color-mix(in srgb,var(--ink) 5%,transparent),transparent 70%)}
+.news{display:inline-flex;gap:10px;align-items:center;border-radius:999px;padding:5px 14px 5px 5px;font-size:13.5px;color:var(--ink-2)}
+.news b{background:var(--accent);color:var(--on-accent);border-radius:999px;padding:3px 10px;font-weight:650;font-size:12px}
+.news .ico{width:14px;height:14px;color:var(--muted)}
+.news:hover .ico{transform:translateX(2px)}
+h1{font:380 italic var(--step-5)/1 var(--serif);letter-spacing:-.035em;margin:22px auto 0;max-width:13ch}
+h1 em{color:var(--accent-ink)}
+.lede{max-width:34em;margin:24px auto 0;font-size:var(--step-1);line-height:1.55;color:var(--ink-2)}
+.ctas{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:32px}
+.proof{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin:26px 0 0;padding:0;list-style:none;font-size:14px;color:var(--muted)}
+.proof li{display:flex;gap:7px;align-items:center}
+.proof .ico{width:16px;height:16px;color:var(--accent-ink)}
+
+.stage{position:relative;margin:56px auto 0;width:min(1140px,100%);perspective:1800px}
+.tilt{transform-origin:50% 0;transform:rotateX(16deg) scale(.94);transition:transform .2s linear;will-change:transform}
+.screen{position:relative;border-radius:18px;padding:8px;background:linear-gradient(180deg,color-mix(in srgb,var(--ink) 14%,transparent),color-mix(in srgb,var(--ink) 3%,transparent));box-shadow:0 60px 140px -40px rgb(0 0 0 / .85)}
+.screen img{border-radius:12px;width:100%;aspect-ratio:16/10;object-fit:cover}
+.screen::after{content:"";position:absolute;inset:0;border-radius:18px;pointer-events:none;box-shadow:inset 0 1px 0 rgb(255 255 255 / .12)}
+.fade-b{position:absolute;inset:auto 0 -2px;height:38%;background:linear-gradient(transparent,var(--canvas));pointer-events:none;z-index:2}
+.float{position:absolute;z-index:3;text-align:left;border-radius:var(--r);padding:16px 18px;font-size:13.5px;color:var(--ink-2);animation:bob 7s ease-in-out infinite}
+.float.note{left:-34px;top:44%;width:260px}
+.float.note b{display:block;font:500 italic 19px/1.2 var(--serif);color:var(--ink);margin-bottom:6px}
+.chip{display:inline-flex;gap:6px;align-items:center;margin-top:12px;font-size:12px;color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:999px;padding:4px 10px}
+.chip .ico{width:13px;height:13px}
+.float.status{right:150px;top:-26px;width:auto;display:flex;gap:10px;align-items:center;padding:10px 14px 10px 10px;animation-delay:-3s}
+.float.status i{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent-ink)}
+.float.status small{display:block;color:var(--muted);font-size:12px}
+.phone{position:absolute;z-index:3;right:-18px;bottom:-6%;width:190px;border-radius:34px;padding:6px;background:#0d0a08;box-shadow:0 40px 90px -30px rgb(0 0 0 / .9),inset 0 0 0 1px rgb(255 255 255 / .08)}
+.phone img{border-radius:28px}
+@keyframes bob{50%{translate:0 -8px}}
+
+/* ── Sections ── */
+section{position:relative}
+.sec{padding:clamp(88px,10vw,148px) 0 0}
+.head{text-align:center;max-width:760px;margin:0 auto}
+.eyebrow{display:inline-block;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);font-weight:650}
+h2{font:380 italic var(--step-4)/1.02 var(--serif);letter-spacing:-.025em;margin-top:14px}
+.sub{color:var(--muted);font-size:var(--step-1);margin:16px auto 0;max-width:36em}
+
+/* story */
+.story{text-align:center;padding-top:clamp(80px,9vw,130px)}
+.story blockquote{margin:0 auto;max-width:24em;font:380 italic clamp(24px,2vw + 14px,36px)/1.32 var(--serif);letter-spacing:-.01em}
+.story blockquote span{color:var(--muted)}
+.story figcaption{margin-top:20px;font-size:14px;color:var(--faint)}
+
+/* promises */
+.promises{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:64px}
+.promise{border-radius:var(--r-lg);padding:28px;background:linear-gradient(180deg,color-mix(in srgb,var(--card) 92%,var(--ink) 3%),var(--card));box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 var(--hi)}
+.promise .badge{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent-ink);margin-bottom:22px}
+.promise .badge .ico{width:20px;height:20px}
+.promise h3{font:450 italic 27px/1.15 var(--serif)}
+.promise p{margin:10px 0 0;color:var(--muted);font-size:15.5px;line-height:1.55}
+
+/* ── Product tour: tabs + one big screen ── */
+.tour{margin-top:48px}
+.tabs{display:flex;gap:4px;justify-content:center;width:max-content;max-width:100%;margin:0 auto;padding:5px;border-radius:999px;overflow-x:auto;scrollbar-width:none}
+.tab{position:relative;display:flex;gap:8px;align-items:center;border:0;background:transparent;color:var(--muted);font:500 14.5px var(--sans);padding:10px 16px;border-radius:999px;cursor:pointer;white-space:nowrap;transition:color .2s,background .3s var(--ease)}
+.tab .ico{width:16px;height:16px}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);background:color-mix(in srgb,var(--ink) 9%,transparent);box-shadow:inset 0 1px 0 var(--hi)}
+.tab .bar{position:absolute;left:16px;right:16px;bottom:4px;height:2px;border-radius:2px;background:color-mix(in srgb,var(--accent) 25%,transparent);overflow:hidden;opacity:0}
+.tab[aria-selected="true"] .bar{opacity:1}
+.tab .bar::after{content:"";position:absolute;inset:0;background:var(--accent);transform-origin:0;transform:scaleX(var(--p,0))}
+.panel{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,8fr);gap:clamp(24px,4vw,56px);align-items:center;margin-top:40px}
+.panel[hidden]{display:none}
+.panel .cap{font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.panel h3{font:400 italic var(--step-3)/1.08 var(--serif);letter-spacing:-.015em;margin-top:12px}
+.panel p{color:var(--ink-2);margin:16px 0 20px}
+.ticks{list-style:none;margin:0;padding:0;display:grid;gap:10px;font-size:15px;color:var(--ink-2)}
+.ticks li{display:flex;gap:10px;align-items:flex-start}
+.ticks .ico{width:18px;height:18px;margin-top:3px;color:var(--accent-ink)}
+.panel .screen{animation:rise .6s var(--ease)}
+@keyframes rise{from{opacity:0;translate:0 14px}}
+
+/* ── Bento: everything else, each with a tiny live UI ── */
+.bento{display:grid;grid-template-columns:repeat(6,1fr);grid-auto-rows:minmax(220px,auto);gap:14px;margin-top:56px}
+.cell{position:relative;overflow:hidden;border-radius:var(--r-lg);padding:24px;background:var(--card);box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 var(--hi);display:flex;flex-direction:column;transition:transform .35s var(--ease),box-shadow .35s}
+.cell:hover{transform:translateY(-3px);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,var(--line)),inset 0 1px 0 var(--hi),0 30px 60px -36px rgb(0 0 0 / .8)}
+.cell::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .3s;background:radial-gradient(320px circle at var(--mx,50%) var(--my,0%),color-mix(in srgb,var(--accent) 10%,transparent),transparent 60%)}
+.cell:hover::before{opacity:1}
+.cell h3{font:600 16px/1.3 var(--sans);letter-spacing:-.005em}
+.cell p{margin:6px 0 0;color:var(--muted);font-size:14.5px;line-height:1.5}
+.cell .demo{margin-top:auto;padding-top:20px}
+.c-3{grid-column:span 3}.c-2{grid-column:span 2}.c-4{grid-column:span 4}
+.tag{display:inline-flex;align-self:flex-start;margin-top:10px;font-size:11.5px;color:var(--accent-ink);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);border-radius:999px;padding:1px 8px}
+/* demo bits */
+.mini{border-radius:12px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);padding:12px 14px;font-size:13.5px;color:var(--ink-2)}
+.search{display:flex;gap:10px;align-items:center}
+.search .ico{color:var(--muted);width:16px;height:16px}
+.caret{width:1.5px;height:16px;background:var(--accent);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.hits{margin-top:8px;display:grid;gap:6px}
+.hits div{padding:9px 14px;border-radius:10px;background:var(--surface);font-size:13px;color:var(--muted)}
+.hits mark{background:color-mix(in srgb,var(--accent) 26%,transparent);color:var(--ink);border-radius:4px;padding:0 3px}
+.checks{display:grid;gap:8px}
+.checks label{display:flex;gap:10px;align-items:center;font-size:13.5px;color:var(--ink-2)}
+.box{width:17px;height:17px;border-radius:5px;box-shadow:inset 0 0 0 1.5px var(--faint);display:grid;place-items:center;flex:none}
+.box.on{background:var(--accent);box-shadow:none;color:var(--on-accent)}
+.box.on .ico{width:12px;height:12px;stroke-width:3}
+.done{color:var(--faint);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--faint) 80%,transparent)}
+.wave{display:flex;gap:3px;align-items:center;height:44px}
+.wave i{flex:1;border-radius:2px;background:color-mix(in srgb,var(--accent) 70%,transparent);animation:eq 1.4s ease-in-out infinite}
+@keyframes eq{50%{transform:scaleY(.45)}}
+.rec{display:flex;gap:10px;align-items:center;margin-bottom:10px;font-size:12.5px;color:var(--muted)}
+.rec b{width:9px;height:9px;border-radius:50%;background:#e5766a;box-shadow:0 0 0 4px rgb(229 118 106 / .2)}
+.toggle-row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.switch{width:38px;height:22px;border-radius:999px;background:var(--accent);position:relative;flex:none}
+.switch::after{content:"";position:absolute;right:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--on-accent)}
+.toggle-row small{display:block;color:var(--faint);font-size:12px;margin-top:2px}
+.link{display:flex;gap:8px;align-items:center;font:500 12.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink-2);overflow:hidden;white-space:nowrap}
+.link .ico{color:var(--accent-ink);width:15px;height:15px}
+.link span{overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.pin{display:flex;gap:10px;justify-content:center}
+.pin i{width:14px;height:14px;border-radius:50%;background:var(--accent)}
+.pin i.e{background:transparent;box-shadow:inset 0 0 0 1.5px var(--faint)}
+.fmts{display:flex;flex-wrap:wrap;gap:6px}
+.fmts span{font-size:12.5px;padding:5px 10px;border-radius:8px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);color:var(--ink-2)}
+.cal{display:grid;grid-template-columns:repeat(14,1fr);gap:4px}
+.cal i{aspect-ratio:1;border-radius:4px;background:color-mix(in srgb,var(--ink) 7%,transparent)}
+.cal i.a{background:color-mix(in srgb,var(--accent) 35%,transparent)}
+.cal i.b{background:color-mix(in srgb,var(--accent) 65%,transparent)}
+.cal i.c{background:var(--accent)}
+
+/* ── Privacy: muted paper band (never harsh white) ── */
+.paper{--canvas:#f2efe7;--surface:#f7f4ee;--card:#f9f7f2;--line:#dbd5c8;--ink:#2b2823;--ink-2:#433f38;--muted:#615b51;--faint:#6a6459;--accent-ink:#9a5b16;--hi:rgb(255 255 255 / .75);--wash:rgb(70 55 25 / .06);
+  background:var(--canvas);color:var(--ink);margin:clamp(96px,10vw,150px) 12px 0;padding:clamp(80px,9vw,128px) 0;border-radius:40px}
+.paper .sub{color:var(--muted)}
+.compare{margin:52px auto 0;max-width:900px;border-radius:var(--r-lg);overflow:hidden;background:var(--card);box-shadow:inset 0 0 0 1px var(--line),0 30px 70px -40px rgb(60 40 10 / .35)}
+.compare table{width:100%;border-collapse:collapse;font-size:15px}
+.compare th,.compare td{padding:16px 22px;text-align:left;border-bottom:1px solid var(--line)}
+.compare tr:last-child td{border-bottom:0}
+.compare thead th{font:600 13px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--surface)}
+.compare thead th.us{color:var(--accent-ink)}
+.compare td:first-child{color:var(--muted);width:34%}
+.compare td.us{font-weight:600;color:var(--ink);background:color-mix(in srgb,#f0b35e 9%,transparent)}
+.compare td .ico{width:16px;height:16px;vertical-align:-3px;margin-right:6px}
+.compare td.us .ico{color:#1d7a52}
+.honest{display:flex;gap:14px;align-items:flex-start;max-width:900px;margin:18px auto 0;padding:18px 22px;border-radius:var(--r);background:color-mix(in srgb,#f0b35e 12%,var(--card));box-shadow:inset 0 0 0 1px color-mix(in srgb,#9a5b16 25%,var(--line));font-size:15px;color:var(--ink-2)}
+.honest .ico{color:#9a5b16;margin-top:3px}
+
+/* ── Themes: pick one and the page changes ── */
+.themes{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:44px auto 0;max-width:820px}
+.sw{position:relative;width:76px;height:54px;border-radius:14px;border:0;cursor:pointer;background:var(--b);box-shadow:inset 0 0 0 1px rgb(127 127 127 / .28);transition:transform .25s var(--spring)}
+.sw::before{content:"";position:absolute;left:9px;bottom:9px;width:30px;height:12px;border-radius:4px;background:var(--c)}
+.sw::after{content:"";position:absolute;right:9px;top:9px;width:9px;height:9px;border-radius:50%;background:var(--a)}
+.sw:hover{transform:translateY(-3px)}
+.sw[aria-pressed="true"]{box-shadow:0 0 0 2px var(--canvas),0 0 0 4px var(--accent)}
+.tname{margin-top:20px;text-align:center;font-size:15px;color:var(--muted);min-height:24px}
+.tname b{color:var(--ink);font-weight:600}
+
+/* ── FAQ ── */
+.faq{max-width:780px;margin:48px auto 0;display:grid;gap:10px}
+.faq details{border-radius:var(--r);background:var(--card);box-shadow:inset 0 0 0 1px var(--line)}
+.faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 22px;font-weight:550;font-size:16.5px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary .ico{color:var(--muted);transition:rotate .3s var(--ease)}
+.faq details[open] summary .ico{rotate:45deg}
+.faq details p{margin:0;padding:0 22px 20px;color:var(--muted);font-size:15.5px}
+
+/* ── Closing ── */
+.closing{padding:clamp(96px,10vw,150px) 0 clamp(80px,8vw,120px)}
+.end-card{position:relative;overflow:hidden;text-align:center;border-radius:32px;padding:clamp(56px,7vw,96px) 24px;background:radial-gradient(70% 90% at 50% 0%,color-mix(in srgb,var(--accent) 18%,var(--card)),var(--card) 70%);box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 var(--hi)}
+.end-card h2{font-size:clamp(52px,7vw,104px);margin:0}
+.end-card .sub{margin-top:14px}
+footer{padding:28px 0 48px;color:var(--faint);font-size:14px}
+footer .wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+footer nav{margin-left:auto;display:flex;gap:20px}
+footer a:hover{color:var(--ink)}
+
+/* mobile bottom bar */
+
+/* reveal on scroll */
+.rv{opacity:0;translate:0 18px;transition:opacity .8s var(--ease),translate .8s var(--ease)}
+.rv.in{opacity:1;translate:0 0}
+
+@media (max-width:980px){
+  .float.note,.float.status{display:none}
+  .phone{width:150px;right:-6px}
+  .bento{grid-template-columns:repeat(2,1fr)}
+  .c-3,.c-2,.c-4{grid-column:span 1}
+  .bento .wide{grid-column:span 2}
+}
+@media (max-width:760px){
+  .wrap{width:calc(100% - 32px)}
+  .nav{padding-left:16px}.nav .links,.nav .dot-btn{display:none}
+  .hero{padding-top:120px}
+  .ctas{flex-direction:column;align-items:stretch;max-width:340px;margin-inline:auto}
+  .proof{gap:10px 16px;font-size:13px}
+  .phone{display:none}
+  .tilt{transform:none!important}
+  .stage{margin-top:44px}
+  .promises{grid-template-columns:1fr;margin-top:44px}
+  .tabs{display:grid;grid-template-columns:repeat(4,1fr);width:100%;border-radius:20px}
+  .tab{flex-direction:column;gap:4px;padding:10px 4px 12px;font-size:12.5px;border-radius:15px}
+  .tab .bar{left:22%;right:22%;bottom:4px}
+  .panel{grid-template-columns:1fr;gap:24px}
+  .panel .txt{order:2}
+  .bento{grid-template-columns:1fr;grid-auto-rows:auto}.bento .wide{grid-column:auto}
+  .cell .demo{padding-top:18px}
+  .compare td:first-child{font-size:13px}
+  .compare th,.compare td{padding:13px 14px;font-size:14px}
+  .compare td:first-child{width:auto}
+  .paper{border-radius:28px;margin-inline:8px}
+  .sw{width:58px;height:44px}
+  footer nav{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  .rv{opacity:1;translate:none}.tilt{transform:none!important}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-device" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+  <symbol id="i-offline" viewBox="0 0 24 24"><path d="M3 3l18 18M8.5 16.5a5 5 0 0 1 7 0M5 12.6a10 10 0 0 1 5-2.5M19 12.6a10 10 0 0 0-2.2-1.6M2 8.8a15 15 0 0 1 4.2-2.6M22 8.8A15 15 0 0 0 11 5"/><circle cx="12" cy="20" r=".8"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H11v18H5.5A2.5 2.5 0 0 1 3 18.5zM21 5.5A2.5 2.5 0 0 0 18.5 3H13v18h5.5a2.5 2.5 0 0 0 2.5-2.5z"/></symbol>
+  <symbol id="i-layout" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M9 21V9"/></symbol>
+  <symbol id="i-slides" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21l4-4 4 4"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav glass" id="nav">
+  <a class="wm" href="/welcome" aria-label="Folio56 home"><b>folio</b><i>56</i></a>
+  <nav class="links" aria-label="Main"><a href="#tour">Features</a><a href="#privacy">Privacy</a><a href="#themes">Themes</a><a href="#faq">FAQ</a></nav>
+  <div class="end">
+    <button class="dot-btn" id="cycle" aria-label="Try the next theme" title="Try the next theme"><span></span></button>
+    <a class="btn primary sm" href="/app/">Open Folio56</a>
+  </div>
+</header>
+
+<main id="main">
+<section class="hero">
+  <div class="aura" aria-hidden="true"></div>
+  <div class="wrap">
+    <a class="news glass" href="#tour"><b>New</b> Presentations with flowcharts and charts <svg class="ico"><use href="#i-arrow"/></svg></a>
+    <h1>Your notes, on your device. <em>Nothing leaves it.</em></h1>
+    <p class="lede">A calm, private notes app that runs in your browser. Write, plan, read PDFs and make presentations — offline, with no account and no sync.</p>
+    <div class="ctas">
+      <a class="btn primary" href="/app/">Start writing — it’s free <svg class="ico"><use href="#i-arrow"/></svg></a>
+      <a class="btn ghost" href="#tour">Take the tour</a>
+    </div>
+    <ul class="proof">
+      <li><svg class="ico"><use href="#i-user"/></svg>No account</li>
+      <li><svg class="ico"><use href="#i-device"/></svg>Saved on your device</li>
+      <li><svg class="ico"><use href="#i-offline"/></svg>Works offline</li>
+      <li><svg class="ico"><use href="#i-spark"/></svg>AI only if you ask</li>
+    </ul>
+  </div>
+  <div class="wrap stage">
+    <div class="tilt" id="tilt">
+      <div class="screen"><img src="/welcome/home.webp" width="1920" height="1200" alt="Folio56 home: a grid of colourful notes — a trip checklist, meeting minutes and reading notes" fetchpriority="high"></div>
+    </div>
+    <div class="float note glass"><b>“Hunza in late October”</b>Five days, three valleys, one very old jeep.<div class="chip"><svg class="ico"><use href="#i-lock"/></svg>Saved here · 0 bytes sent</div></div>
+    <div class="float status glass"><i><svg class="ico"><use href="#i-check"/></svg></i><div>Backed up today<small>to your Notes folder</small></div></div>
+    <div class="phone"><img src="/welcome/phone.webp" width="585" height="1266" alt="Folio56 on a phone" loading="lazy"></div>
+    <div class="fade-b" aria-hidden="true"></div>
+  </div>
+</section>
+
+<section class="story rv"><div class="wrap">
+  <figure style="margin:0">
+    <blockquote>Folio56 is version 56 of me getting annoyed at note apps. <span>Too many accounts, too much sync, AI in every corner.</span> So this one keeps it simple: open it, write, and your notes stay yours.</blockquote>
+    <figcaption>— Biryani, who made it</figcaption>
+  </figure>
+  <div class="promises">
+    <article class="promise rv"><div class="badge"><svg class="ico"><use href="#i-device"/></svg></div><h3>Yours alone</h3><p>Notes live in your browser on your device. No account, and no server holding them — not even ours.</p></article>
+    <article class="promise rv"><div class="badge"><svg class="ico"><use href="#i-offline"/></svg></div><h3>Works offline</h3><p>On a plane or off the grid, it opens and saves the same. Install it and it behaves like an app.</p></article>
+    <article class="promise rv"><div class="badge"><svg class="ico"><use href="#i-spark"/></svg></div><h3>AI only if you ask</h3><p>Off until you turn it on with your own free key. Then it writes up recordings, tidies notes and drafts slides.</p></article>
+  </div>
+</div></section>
+
+<section class="sec" id="tour"><div class="wrap">
+  <div class="head rv"><span class="eyebrow">The tour</span><h2>Calm by default, deep when you need it.</h2></div>
+  <div class="tour rv">
+    <div class="tabs glass" role="tablist" aria-label="Features">
+      <button class="tab" role="tab" id="t-write" aria-controls="p-write" aria-selected="true"><svg class="ico"><use href="#i-pen"/></svg>Write<span class="bar"></span></button>
+      <button class="tab" role="tab" id="t-read" aria-controls="p-read" aria-selected="false" tabindex="-1"><svg class="ico"><use href="#i-book"/></svg>Read PDFs<span class="bar"></span></button>
+      <button class="tab" role="tab" id="t-tpl" aria-controls="p-tpl" aria-selected="false" tabindex="-1"><svg class="ico"><use href="#i-layout"/></svg>Templates<span class="bar"></span></button>
+      <button class="tab" role="tab" id="t-deck" aria-controls="p-deck" aria-selected="false" tabindex="-1"><svg class="ico"><use href="#i-slides"/></svg>Present<span class="bar"></span></button>
+    </div>
+    <div class="panel" role="tabpanel" id="p-write" aria-labelledby="t-write">
+      <div class="txt"><div class="cap">Writing</div><h3>A page that gets out of the way.</h3><p>Headings, tables, checklists, code and pictures. Long notes get a contents list beside the page; links between notes work both ways.</p>
+        <ul class="ticks"><li><svg class="ico"><use href="#i-check"/></svg>Type [[ to link any note</li><li><svg class="ico"><use href="#i-check"/></svg>Version history, locked notes, focus mode</li><li><svg class="ico"><use href="#i-check"/></svg>Print, or save as Word, Markdown or a web page</li></ul></div>
+      <div class="screen"><img src="/welcome/editor.webp" width="1920" height="1200" alt="The Folio56 editor with a contents list beside a long note" loading="lazy"></div>
+    </div>
+    <div class="panel" role="tabpanel" id="p-read" aria-labelledby="t-read" hidden>
+      <div class="txt"><div class="cap">Margins</div><h3>Read a PDF. Take notes beside it.</h3><p>Open any PDF and write next to it. Quote a line, highlight, or snap part of a page straight into any note you choose.</p>
+        <ul class="ticks"><li><svg class="ico"><use href="#i-check"/></svg>The PDF is read, never uploaded</li><li><svg class="ico"><use href="#i-check"/></svg>Contents, thumbnails, highlights, find</li><li><svg class="ico"><use href="#i-check"/></svg>Text view for easy reading on a phone</li></ul></div>
+      <div class="screen"><img src="/welcome/margins.webp" width="1920" height="1200" alt="Margins: a PDF on the left, notes on the right" loading="lazy"></div>
+    </div>
+    <div class="panel" role="tabpanel" id="p-tpl" aria-labelledby="t-tpl" hidden>
+      <div class="txt"><div class="cap">Templates</div><h3>Start from a good shape.</h3><p>Twenty-six templates for meetings, projects, research and journaling. They ask a question or two and fill in the date for you.</p>
+        <ul class="ticks"><li><svg class="ico"><use href="#i-check"/></svg>Save any note as your own template</li><li><svg class="ico"><use href="#i-check"/></svg>Multi-page templates, like a project hub</li><li><svg class="ico"><use href="#i-check"/></svg>Type /template inside any note</li></ul></div>
+      <div class="screen"><img src="/welcome/templates.webp" width="1920" height="1200" alt="The template gallery with live previews" loading="lazy"></div>
+    </div>
+    <div class="panel" role="tabpanel" id="p-deck" aria-labelledby="t-deck" hidden>
+      <div class="txt"><div class="cap">Presentations</div><h3>From notes to slides in a minute.</h3><p>Turn a note, a Markdown file or a PDF into a presentation. Review the storyline, then get slides with flowcharts, timelines and charts — every number checked against your source.</p>
+        <ul class="ticks"><li><svg class="ico"><use href="#i-check"/></svg>Flowcharts, processes, timelines, charts and 2×2s</li><li><svg class="ico"><use href="#i-check"/></svg>Presenter view, and PowerPoint with editable charts</li><li><svg class="ico"><use href="#i-check"/></svg>No AI needed — none used unless you choose</li></ul></div>
+      <div class="screen"><img src="/welcome/deck.webp" width="1920" height="1200" alt="The presentation studio with slides, a preview and its content" loading="lazy"></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="sec" id="more"><div class="wrap">
+  <div class="head rv"><span class="eyebrow">Built in</span><h2>Everything a notebook should do.</h2><p class="sub">No plugins to hunt for. It’s all here on day one, and all of it works offline.</p></div>
+  <div class="bento">
+    <article class="cell c-3 wide rv"><h3>Search that forgives typos</h3><p>Spell it however you like. It still finds the note.</p>
+      <div class="demo"><div class="mini search"><svg class="ico"><use href="#i-search"/></svg>chlorofyl<span class="caret"></span></div>
+        <div class="hits"><div>Biology · <mark>Chlorophyll</mark> absorbs red and blue light…</div><div>Garden journal · leaves losing <mark>chlorophyll</mark> in October</div></div></div></article>
+    <article class="cell c-3 wide rv"><h3>Tasks & weekly review</h3><p>Checklists across all your notes become one list, a board and a Friday review.</p>
+      <div class="demo mini checks"><label><span class="box on"><svg class="ico"><use href="#i-check"/></svg></span><span class="done">Book the jeep for Hunza</span></label><label><span class="box on"><svg class="ico"><use href="#i-check"/></svg></span><span class="done">Send design review notes</span></label><label><span class="box"></span>Draft Q4 goals</label></div></article>
+    <article class="cell c-2 rv"><h3>Voice memos</h3><p>Record a meeting. Keep the audio, or get minutes with action items.</p><span class="tag">optional AI</span>
+      <div class="demo"><div class="rec"><b></b>Recording · 12:48</div><div class="wave" aria-hidden="true"><i style="height:40%"></i><i style="height:70%;animation-delay:-.2s"></i><i style="height:55%;animation-delay:-.5s"></i><i style="height:90%;animation-delay:-.1s"></i><i style="height:60%;animation-delay:-.7s"></i><i style="height:35%;animation-delay:-.3s"></i><i style="height:80%;animation-delay:-.9s"></i><i style="height:50%;animation-delay:-.4s"></i><i style="height:95%;animation-delay:-.6s"></i><i style="height:45%;animation-delay:-.2s"></i><i style="height:65%;animation-delay:-.8s"></i><i style="height:30%;animation-delay:-.5s"></i><i style="height:75%;animation-delay:-.1s"></i><i style="height:50%;animation-delay:-.3s"></i></div></div></article>
+    <article class="cell c-2 rv"><h3>Backups you control</h3><p>One click, or a quiet daily copy into a folder you pick.</p>
+      <div class="demo mini toggle-row"><div>Daily backup<small>Notes folder · 9:00 today</small></div><span class="switch" role="img" aria-label="On"></span></div></article>
+    <article class="cell c-2 rv"><h3>Share as a link</h3><p>The note travels inside an encrypted link. No server keeps it.</p>
+      <div class="demo mini link"><svg class="ico"><use href="#i-lock"/></svg><span>…/#note=v1.Qm9vayB0aGUgamVlcCBm…</span></div></article>
+    <article class="cell c-2 rv"><h3>Locked notes</h3><p>A passcode encrypts a note on your device.</p>
+      <div class="demo pin" aria-hidden="true"><i></i><i></i><i></i><i class="e"></i><i class="e"></i><i class="e"></i></div></article>
+    <article class="cell c-2 rv"><h3>Journal & Today</h3><p>A daily note, a focus list and a calendar of your days.</p>
+      <div class="demo cal" aria-hidden="true"><i class="a"></i><i></i><i class="b"></i><i class="c"></i><i class="a"></i><i></i><i></i><i class="b"></i><i class="a"></i><i class="c"></i><i></i><i class="a"></i><i class="b"></i><i></i><i class="a"></i><i class="c"></i><i></i><i class="b"></i><i class="a"></i><i class="a"></i><i></i><i class="c"></i><i class="b"></i><i></i><i class="a"></i><i class="b"></i><i class="c"></i><i class="a"></i></div></article>
+    <article class="cell c-2 rv"><h3>Export anything</h3><p>One note or all of them, in the format you need.</p>
+      <div class="demo fmts"><span>Word</span><span>PDF</span><span>Markdown</span><span>Web page</span><span>Text</span><span>PowerPoint</span></div></article>
+  </div>
+</div></section>
+
+<section class="paper" id="privacy"><div class="wrap">
+  <div class="head rv"><span class="eyebrow">Privacy, plainly</span><h2>Where your notes live.</h2><p class="sub">Folio56 is a website that, once it loads, runs entirely in your browser. Your notes are saved in that browser’s own storage — on your device, and nowhere else.</p></div>
+  <div class="compare rv">
+    <table>
+      <thead><tr><th scope="col"><span class="sr" style="position:absolute;left:-9999px">Question</span></th><th scope="col" class="us">Folio56</th><th scope="col">Most cloud note apps</th></tr></thead>
+      <tbody>
+        <tr><td>Where your notes are kept</td><td class="us"><svg class="ico"><use href="#i-check"/></svg>On your device</td><td>On their servers</td></tr>
+        <tr><td>Account needed</td><td class="us"><svg class="ico"><use href="#i-check"/></svg>None</td><td>Email and password</td></tr>
+        <tr><td>Works without internet</td><td class="us"><svg class="ico"><use href="#i-check"/></svg>Fully</td><td>Usually only partly</td></tr>
+        <tr><td>AI reads your notes</td><td class="us"><svg class="ico"><use href="#i-check"/></svg>Only if you turn it on</td><td>Often built in and on</td></tr>
+        <tr><td>Sync between devices</td><td class="us">No — on purpose</td><td>Yes</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="honest rv"><svg class="ico"><use href="#i-info"/></svg><div><b>The honest part:</b> clearing your browser’s data deletes your notes too. Folio56 reminds you to keep a backup, and can save one to a folder every day.</div></div>
+</div></section>
+
+<section class="sec" id="themes"><div class="wrap">
+  <div class="head rv"><span class="eyebrow">Seventeen themes</span><h2>Easy on the eyes, day or night.</h2><p class="sub">Eleven low-glare darks and six soft, off-white lights. Try one — this page changes with it.</p></div>
+  <div class="themes rv" id="sw" role="group" aria-label="Themes"></div>
+  <p class="tname" id="tname" aria-live="polite"></p>
+</div></section>
+
+<section class="sec" id="faq"><div class="wrap">
+  <div class="head rv"><span class="eyebrow">Questions</span><h2>Good to know.</h2></div>
+  <div class="faq rv">
+    <details><summary>Is it really free?<svg class="ico"><use href="#i-plus"/></svg></summary><p>Yes. Open it and start writing — there’s nothing to sign up for.</p></details>
+    <details><summary>Where exactly are my notes?<svg class="ico"><use href="#i-plus"/></svg></summary><p>In your browser’s own storage on this device. They aren’t sent anywhere unless you share a note as a link or export it yourself.</p></details>
+    <details><summary>Can I use it on my phone and laptop?<svg class="ico"><use href="#i-plus"/></svg></summary><p>Yes, and you can install it like an app on both. Each browser keeps its own notes, so move them with a backup file or a share link.</p></details>
+    <details><summary>What happens if I clear my browser?<svg class="ico"><use href="#i-plus"/></svg></summary><p>Your notes are cleared too. That’s why Folio56 nudges you to back up, and can save a copy to a folder every day.</p></details>
+    <details><summary>Does it use AI?<svg class="ico"><use href="#i-plus"/></svg></summary><p>Only if you switch it on and add your own free key. Until then, nothing you write goes to any AI.</p></details>
+  </div>
+</div></section>
+
+<section class="closing"><div class="wrap">
+  <div class="end-card rv">
+    <h2>Start writing.</h2>
+    <p class="sub">Free. No account. Open it and type.</p>
+    <div class="ctas"><a class="btn primary" href="/app/">Open Folio56 <svg class="ico"><use href="#i-arrow"/></svg></a></div>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <span class="wm"><b style="font-size:21px">folio</b><i style="font-size:12px">56</i></span>
+  <span>Made by one person who got annoyed at note apps.</span>
+  <nav aria-label="Footer"><a href="#privacy">Privacy</a><a href="#faq">Questions</a><a href="/app/">Open the app</a></nav>
+</div></footer>
+
+
+<script>
+// Real themes from the app: [name, note, canvas, surface, card, raised, line, ink, ink2, muted, faint, accent, light?]
+const T=[
+ ['Espresso','Warm coffee browns','#1a1512','#261f1a','#221b17','#30271f','#3b3028','#efe6dc','#dacdbe','#aa9a8a','#988877','#f0b35e'],
+ ['Charcoal','Soft neutral grey','#141416','#1d1d21','#1a1a1e','#26262b','#2f2f35','#ececec','#d4d5d9','#9b9da5','#878992','#7aa9ff'],
+ ['Graphite','Pure neutral grey','#161617','#1f1f20','#1c1c1d','#29292b','#343436','#ebebeb','#d3d3d3','#a0a0a0','#8e8e8e','#5fcfc0'],
+ ['Ember','Least blue light, for nights','#17110d','#231a14','#1f1711','#2d2219','#3b2d22','#f0e2d2','#ddcab4','#b09781','#9f8670','#f59b7c'],
+ ['Moss','Calm forest greens','#151a16','#1f2620','#1b221c','#28312a','#313b33','#e4e8dc','#cdd3c3','#9aa493','#899380','#9fcf86'],
+ ['Arctic','Cool slate blues','#242933','#2e3440','#2b313c','#3b4252','#3f4656','#eceff4','#d8dee9','#a6afc0','#959eaf','#5fcfc0'],
+ ['Tide','Deep teal-navy','#0f1a1d','#172529','#142124','#1f3135','#29393e','#e2eef0','#c9dadd','#94abaf','#839a9e','#5fcfc0'],
+ ['Dusk','Muted plum & rose','#191724','#221f33','#1f1d2e','#2a2740','#322f48','#e0def4','#cfcce6','#a09cbb','#8e8aab','#ee8fb0'],
+ ['Plum','Dark aubergine','#1a1320','#241b2c','#201827','#2e2338','#3a2d46','#ece2f2','#d7cadf','#a898b4','#9786a3','#b59cff'],
+ ['Midnight','Deep navy','#0a0f1a','#131c2d','#111a2a','#1b263b','#24324c','#e6ecf7','#c9d3e6','#909db7','#818ea8','#b59cff'],
+ ['OLED black','True black, max contrast','#000000','#0f0f0f','#0b0b0b','#1c1c1c','#3a3a3a','#ffffff','#f0f0f0','#c4c4c4','#adadad','#7aa9ff'],
+ ['Paper','Warm off-white, soft ink','#f2efe7','#f7f4ee','#f9f7f2','#fffdf9','#dbd5c8','#2b2823','#433f38','#615b51','#6a6459','#c9822c',1],
+ ['Linen','Soft cream','#f3ede2','#f8f3ea','#faf6ef','#fffcf6','#ddd3c2','#2d2720','#463e34','#62574a','#6a5f51','#c9822c',1],
+ ['Blush','Pale rose-sand','#f4ebe8','#f8f1ee','#faf5f3','#fffbfa','#e0cfca','#2e2524','#483b39','#675450','#6f5b57','#c25d7f',1],
+ ['Sage','Calm green-grey','#eaeee6','#f1f4ee','#f5f7f2','#fbfcf9','#cfd8c9','#232a22','#3a4438','#535e4c','#5b6654','#4f8a5b',1],
+ ['Mist','Cool grey-blue, calm','#edf0f3','#f4f6f8','#f7f8fa','#fdfdfe','#d3d9e0','#222831','#3a414c','#565e6a','#5f6773','#3f6fd1',1],
+ ['Fog','Almost colourless grey','#ececec','#f3f3f3','#f6f6f6','#fcfcfc','#d5d5d5','#242424','#3c3c3c','#595959','#616161','#5b5b5b',1]];
+const root=document.documentElement, box=document.getElementById('sw'), tname=document.getElementById('tname');
+let cur=0;
+function apply(i){
+  cur=i; const [n,note,cv,sf,cd,rs,ln,ink,ink2,mu,fa,ac,light]=T[i], s=root.style;
+  Object.entries({'--canvas':cv,'--surface':sf,'--card':cd,'--raised':rs,'--line':ln,'--ink':ink,'--ink-2':ink2,'--muted':mu,'--faint':fa,'--accent':ac,
+    '--accent-ink':light?`color-mix(in srgb, ${ac} 70%, ${ink})`:ac,'--on-accent':light?'#fff':'#14110e',
+    '--wash':light?'rgb(40 30 20 / .06)':'rgb(255 255 255 / .065)','--hi':light?'rgb(255 255 255 / .8)':'rgb(255 255 255 / .06)'}).forEach(([k,v])=>s.setProperty(k,v));
+  root.style.colorScheme=light?'light':'dark';
+  document.querySelector('meta[name=theme-color]').content=cv;
+  box.querySelectorAll('.sw').forEach((b,k)=>b.setAttribute('aria-pressed',k===i));
+  tname.innerHTML=`<b>${n}</b> · ${note}`;
+  try{localStorage.setItem('f56-theme',i)}catch(e){}
+}
+T.forEach((t,i)=>{const b=document.createElement('button');b.className='sw';b.setAttribute('aria-label',t[0]);b.title=t[0];
+  b.style.cssText=`--b:${t[2]};--c:${t[5]};--a:${t[11]}`;b.onclick=()=>apply(i);box.appendChild(b)});
+document.getElementById('cycle').onclick=()=>apply((cur+1)%T.length);
+let saved=0;try{saved=+localStorage.getItem('f56-theme')||0}catch(e){}
+apply(saved<T.length?saved:0);
+
+// Floating nav narrows once you scroll; the hero screen flattens as it comes into view.
+const nav=document.getElementById('nav'), tilt=document.getElementById('tilt');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function onScroll(){
+  const y=scrollY; nav.classList.toggle('scrolled',y>40);
+  if(!reduce){const k=Math.min(1,y/(innerHeight*.55)); tilt.style.transform=`rotateX(${16*(1-k)}deg) scale(${.94+.06*k})`}
+}
+addEventListener('scroll',onScroll,{passive:true}); onScroll();
+
+// Reveal on scroll.
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{rootMargin:'0px 0px -8% 0px'});
+document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+
+// Spotlight that follows the cursor on bento cells.
+document.querySelectorAll('.cell').forEach(c=>c.addEventListener('pointermove',e=>{const r=c.getBoundingClientRect();c.style.setProperty('--mx',e.clientX-r.left+'px');c.style.setProperty('--my',e.clientY-r.top+'px')}));
+
+// Tour tabs: click, arrow keys, and a gentle auto-advance that stops once you interact.
+const tabs=[...document.querySelectorAll('.tab')]; let ti=0, auto=!reduce, t0=performance.now(); const DUR=7000;
+function show(i,focus){ti=i;t0=performance.now();tabs.forEach((t,k)=>{const on=k===i;t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
+  document.getElementById(t.getAttribute('aria-controls')).hidden=!on;t.style.setProperty('--p',0)});if(focus)tabs[i].focus()}
+tabs.forEach((t,i)=>{t.onclick=()=>{auto=false;show(i)};t.onkeydown=e=>{const d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(d){auto=false;show((i+d+tabs.length)%tabs.length,true)}}});
+const tourEl=document.querySelector('.tour'); let inView=false;
+new IntersectionObserver(([e])=>{inView=e.isIntersecting;t0=performance.now()}).observe(tourEl);
+(function loop(now){if(auto&&inView){const p=Math.min(1,(now-t0)/DUR);tabs[ti].style.setProperty('--p',p);if(p>=1)show((ti+1)%tabs.length)}requestAnimationFrame(loop)})(t0);
+</script>
+</body>
 </html>

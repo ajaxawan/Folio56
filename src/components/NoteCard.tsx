@@ -247,7 +247,7 @@ export const NoteCard = memo(function NoteCard({ note, labels, childCount, selec
                         className="mt-[3px] shrink-0 rounded hover:text-accent">
                         {it.checked ? <CheckSquare size={16} className="tick text-accent" /> : <Square size={16} className="text-muted" />}
                       </button>
-                      <span className={`strike [overflow-wrap:anywhere] ${it.checked ? 'on' : ''}`}>{it.p.starred && <Star size={11} className="-mt-0.5 mr-1 inline fill-star text-star" />}{it.p.owner && <b className="font-semibold">{it.p.owner}: </b>}{it.p.text || it.text || '\u00a0'}
+                      <span className="min-w-0 [overflow-wrap:anywhere]"><span className={`strike ${it.checked ? 'on' : ''}`}>{it.p.starred && <Star size={11} className="-mt-0.5 mr-1 inline fill-star text-star" />}{it.p.owner && <b className="font-semibold">{it.p.owner}: </b>}{it.p.text || it.text || '\u00a0'}</span>
                         {it.p.due && !it.checked && <span className={`ml-1.5 whitespace-nowrap text-[11px] ${dueState(it.p.due) === 'overdue' ? 'text-danger' : dueState(it.p.due) === 'today' ? 'text-accent' : 'text-muted'}`}>· {friendlyDue(it.p.due)}</span>}</span>
                     </li>
                   ))}

@@ -1,7 +1,7 @@
 // Layout sweep: every main screen at several widths — screenshots, plus an automatic check that no
 // visible button is covered by something else (overlap) and nothing scrolls sideways.
 const { chromium } = require('playwright'); const fs = require('fs'); const path = require('path')
-const URL = process.env.URL || 'http://localhost:4174'; const OUT = process.env.SHOTS || '/tmp/claude-0/sweep'
+const URL = process.env.URL || 'http://localhost:4174/app'; const OUT = process.env.SHOTS || '/tmp/claude-0/sweep'
 fs.mkdirSync(OUT, { recursive: true })
 const seed = () => new Promise((res) => {
   const t = (s) => [{ type: 'text', text: s, styles: {} }]

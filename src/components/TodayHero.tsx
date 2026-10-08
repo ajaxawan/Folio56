@@ -61,7 +61,7 @@ export function TodayHero({ notes, onOpenToday, onTasks, onJournal, onOpen, onRe
               <button type="button" onClick={() => today && updateNote(today.id, { content: toggleChecklistItem(today.content, t.i, !t.checked) })}
                 className={`flex w-full items-start gap-2.5 rounded-lg px-1.5 py-1.5 text-left text-[15px] hover:bg-wash ${t.checked ? 'text-muted' : 'text-ink'}`}>
                 {t.checked ? <CheckSquare size={18} className="tick mt-px shrink-0 text-accent" /> : <Square size={18} className="mt-px shrink-0 text-muted" />}
-                <span className={`strike ${t.checked ? 'on' : ''}`}>{t.text}</span>
+                <span className="min-w-0 [overflow-wrap:anywhere]"><span className={`strike ${t.checked ? 'on' : ''}`}>{t.text}</span></span>
               </button>
             </li>
           ))}

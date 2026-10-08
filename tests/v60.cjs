@@ -4,7 +4,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs'); const path = require('path')
 const { unzipSync, strFromU8 } = require('fflate')
-const URL = process.env.URL || 'http://localhost:4174';
+const URL = process.env.URL || 'http://localhost:4174/app';
 const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const SHOTS = process.env.SHOTS || ''
 const TMP = fs.mkdtempSync(path.join(require('os').tmpdir(), 'folio60-'))

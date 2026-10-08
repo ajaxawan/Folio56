@@ -61,7 +61,7 @@ let useRelay = false
  * Calls Groq straight from the browser. If the browser blocks that (some networks and privacy
  * extensions do), it falls back to this site's own /api/groq relay, which just forwards the request.
  */
-async function groq(path: string, init: RequestInit, key: string, onWait?: (s: number) => void): Promise<any> {
+async function groq(path: string, init: RequestInit, key: string, onWait?: (s: number) => void, onLimit?: (s: number) => boolean): Promise<any> {
   for (let attempt = 0; attempt < 6; attempt++) {
     let res: Response
     try {
@@ -79,6 +79,7 @@ async function groq(path: string, init: RequestInit, key: string, onWait?: (s: n
     if (res.status === 429) {
       // Free-plan rate limit: wait as long as Groq asks, then try again.
       const wait = Math.min(65, Math.ceil(Number(res.headers.get('retry-after')) || parseWait(msg) || 10 * (attempt + 1)))
+      if (onLimit?.(wait)) throw Object.assign(new GroqError(msg || 'Rate limited', 429), { wait })
       onWait?.(wait)
       await new Promise((r) => setTimeout(r, wait * 1000))
       continue
@@ -118,6 +119,68 @@ async function chat(messages: { role: string; content: string }[], s: VoiceSetti
   const out = r?.choices?.[0]?.message?.content ?? ''
   if (!out.trim()) throw new GroqError('The model returned an empty answer. Try again, or pick another model in Settings.')
   return out.trim().replace(/^```(?:markdown|md)?\n([\s\S]*?)\n```$/, '$1')
+}
+
+// ---------------------------------------------------------------- structured answers (V6.2)
+/** Groq models that can be held to a JSON schema ("strict" structured outputs). */
+export const STRICT_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b']
+export const BEST_FREE = 'openai/gpt-oss-120b'
+const SPARE = 'openai/gpt-oss-20b'
+/** Groq's free plan counts about 8,000 tokens a minute per model; one request must fit inside that. */
+export const TPM = 8000
+export const estTokens = (s: string) => Math.ceil(s.length / 3.5)
+
+export interface JsonOpts {
+  name: string; schema: object; maxTokens: number; effort?: 'low' | 'medium' | 'high'
+  onWait?: (s: number) => void
+  /** Called when the answer comes from another model than asked for (so the UI can say so). */
+  onModel?: (model: string) => void
+}
+/**
+ * Ask for a JSON answer that must match `schema`. Uses GPT-OSS 120B (or your chosen strict model);
+ * if Groq's per-minute limit would make you wait more than ~15 s, the smaller GPT-OSS 20B — which has
+ * its own allowance — answers instead. Falls back to plain JSON mode if strict mode is refused.
+ */
+export async function askJSON<T>(system: string, user: string, o: JsonOpts): Promise<{ data: T; model: string }> {
+  const s = await getVoiceSettings()
+  if (!s.key) throw new GroqError(aiOn() ? 'Add your free Groq key in Settings → AI to use this.' : 'AI features are off. You can turn them on in Settings → AI.')
+  const primary = STRICT_MODELS.includes(s.llm) ? s.llm : BEST_FREE
+  const schemaText = JSON.stringify(o.schema)
+  const room = TPM - 300 - estTokens(system) - estTokens(user) - estTokens(schemaText)
+  if (room < 900) throw new GroqError('That’s too much text for one request on Groq’s free plan. Try a shorter source or a shorter length.')
+  const maxTokens = Math.min(o.maxTokens, room)
+  const call = async (model: string, mode: 'strict' | 'object', effort = o.effort ?? 'medium', canSpill = true): Promise<{ data: T; model: string }> => {
+    const body: Record<string, unknown> = {
+      model, temperature: 0.4, max_completion_tokens: maxTokens,
+      messages: [{ role: 'system', content: mode === 'object' ? `${system}\n\nReply with ONE JSON object matching this JSON schema, and nothing else:\n${schemaText}` : system }, { role: 'user', content: user }],
+      response_format: mode === 'strict' ? { type: 'json_schema', json_schema: { name: o.name, strict: true, schema: o.schema } } : { type: 'json_object' },
+    }
+    if (model.startsWith('openai/gpt-oss')) { body.reasoning_effort = effort; body.include_reasoning = false }
+    let r: any
+    try {
+      r = await groq('/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, s.key, o.onWait,
+        canSpill && model !== SPARE ? (wait) => wait > 15 : undefined)
+    } catch (e) {
+      const g = e as GroqError & { wait?: number }
+      if (g.status === 429 && g.wait !== undefined && model !== SPARE) { o.onModel?.(SPARE); return call(SPARE, mode, effort, false) }
+      if (g.status === 404 || /decommission|does not exist|not found/i.test(g.message)) { if (model !== SPARE) { o.onModel?.(SPARE); return call(SPARE, mode, effort, false) } }
+      if (g.status === 400 && mode === 'strict') {
+        // the model drifted from the schema, or strict mode isn't available: try once more, then plain JSON mode
+        if (/json_validate_failed|Failed to generate JSON|schema/i.test(g.message) && effort !== 'low') return call(model, 'strict', 'low', canSpill)
+        return call(model, 'object', effort, canSpill)
+      }
+      throw e
+    }
+    const ch = r?.choices?.[0]
+    const txt = String(ch?.message?.content ?? '').trim()
+    if (ch?.finish_reason === 'length' && effort !== 'low') return call(model, mode, 'low', canSpill) // ran out of room thinking: think less
+    try { return { data: JSON.parse(txt) as T, model } } catch { /* repaired below */ }
+    const a = txt.indexOf('{'), b = txt.lastIndexOf('}')
+    try { if (a >= 0 && b > a) return { data: JSON.parse(txt.slice(a, b + 1)) as T, model } } catch { /* fall through */ }
+    if (mode === 'strict') return call(model, 'object', 'low', canSpill)
+    throw new GroqError(ch?.finish_reason === 'length' ? 'The answer was cut short. Try a shorter length.' : 'The AI’s answer wasn’t valid. Try again.')
+  }
+  return call(primary, 'strict')
 }
 
 // ---------------------------------------------------------------- prompts

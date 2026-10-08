@@ -1,10 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { FileCode2, FileText, Presentation, Sparkles, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowUp, FileCode2, FileText, Plus, Presentation, Sparkles, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 import { db } from '../lib/db'
-import { DECK_THEMES, fromBlocks, generateWithAI, markdownSource, metaFor, noteSource, pdfPageSlides, pdfSource, saveDeck, type AiOpts, type Deck, type Slide } from '../lib/deck'
+import { DECK_THEMES, LAYOUTS, fromBlocks, markdownSource, metaFor, noteSource, pdfPageSlides, pdfSource, saveDeck, type Deck, type Layout, type Slide } from '../lib/deck'
+import type { AiOpts, Outline, OutlineItem } from '../lib/deckAI'
 import { pickFile } from '../lib/image'
 import { usePhone } from '../lib/mobile'
 import { useAI, usePrefs } from '../lib/prefs'
@@ -37,6 +38,10 @@ export function DeckMaker({ source, onClose, onCreated }: { source?: DeckSource;
   const [length, setLength] = useState<AiOpts['length']>('standard')
   const [speaker, setSpeaker] = useState(true)
   const [extra, setExtra] = useState('')
+  const [audience, setAudience] = useState('')
+  const [review, setReview] = useState(true)
+  const [outline, setOutline] = useState<Outline | null>(null)
+  const [srcMeta, setSrcMeta] = useState<{ title: string; src: Deck['source'] } | null>(null)
   const [theme, setTheme] = useState(() => { try { return localStorage.getItem('folio.deckTheme') || 'classic' } catch { return 'classic' } })
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
@@ -48,41 +53,50 @@ export function DeckMaker({ source, onClose, onCreated }: { source?: DeckSource;
     const f = await pickFile(kind === 'pdf' ? 'application/pdf,.pdf' : '.md,.markdown,.txt,text/markdown,text/plain')
     if (f) { setFile(f); setError('') }
   }
+  const opts = (): AiOpts => ({ purpose, length, notes: speaker, extra, audience })
+  const finish = async (deck: Deck) => { setBusy('Saving…'); const n = await saveDeck(deck); onCreated(n.id) }
+  /** AI step 2: the slides, from the (reviewed) storyline. */
+  const design = async (o: Outline, meta = srcMeta) => {
+    setError('')
+    try {
+      const { designSlides, figuresOf } = await import('../lib/deckAI')
+      const slides = await designSlides(o, opts(), setBusy)
+      await finish({ v: 1, theme, title: o.title || meta?.title || 'Presentation', subtitle: o.subtitle, slides, source: meta?.src, made: 'ai', createdAt: Date.now(), figures: figuresOf(o.source) })
+    } catch (e) { setError((e as Error).message || 'Something went wrong.'); setBusy('') }
+  }
   const run = async () => {
     setError(''); setBusy('Getting the content…')
     try { localStorage.setItem('folio.deckTheme', theme) } catch { /* ignore */ }
     try {
-      let title = '', subtitle = '', slides: Slide[] = []
+      let title = '', slides: Slide[] = [], text = ''
       let src: Deck['source']
       if (kind === 'pdf') {
         const data = file ? await file.arrayBuffer() : null
         const doc = data ? (await import('../lib/margins').then((m) => m.openPdf(data))) : (source as { doc: PDFDocumentProxy }).doc
         const name = file?.name ?? (source as { name: string }).name
         src = { kind: 'pdf', name }
-        if (method === 'pages') {
-          const p = await pdfSource(doc, name)
-          title = p.title
-          slides = await pdfPageSlides(doc, (s) => setBusy(s))
-        } else {
-          const p = await pdfSource(doc, name, setBusy)
-          if (p.text.replace(/\s/g, '').length < 200) throw new Error('This PDF has almost no text (it may be scanned images). Try “One slide per page”.')
-          const r = await generateWithAI(p.text, { purpose, length, notes: speaker, extra }, setBusy)
-          title = r.title || p.title; subtitle = r.subtitle; slides = r.slides
-        }
+        const p = await pdfSource(doc, name, method === 'pages' ? undefined : setBusy)
+        title = p.title
+        if (method === 'pages') slides = await pdfPageSlides(doc, (s) => setBusy(s))
+        else { if (p.text.replace(/\s/g, '').length < 200) throw new Error('This PDF has almost no text (it may be scanned images). Try “One slide per page”.'); text = p.text }
       } else {
         const s = kind === 'note' ? await noteSource(noteId, withPages && kids > 0) : await markdownSource(file!)
         src = { kind: kind === 'note' ? 'note' : 'markdown', name: s.title, id: kind === 'note' ? noteId : undefined }
-        if (method === 'ai') {
-          if (s.text.trim().length < 80) throw new Error('There’s very little here to make slides from. Write a bit more, or use “From headings”.')
-          const r = await generateWithAI(s.text, { purpose, length, notes: speaker, extra }, setBusy)
-          title = r.title || s.title; subtitle = r.subtitle; slides = r.slides
-        } else { title = s.title; slides = fromBlocks(s.blocks, s.title) }
+        title = s.title
+        if (method === 'ai') { if (s.text.trim().length < 80) throw new Error('There’s very little here to make slides from. Write a bit more, or use “From headings”.'); text = s.text }
+        else slides = fromBlocks(s.blocks, s.title)
       }
-      if (slides[0]?.layout !== 'title') slides.unshift({ id: crypto.randomUUID().slice(0, 8), layout: 'title', title, subtitle: subtitle || undefined })
-      const deck: Deck = { v: 1, theme, title: title || 'Presentation', subtitle, slides, source: src, made: method, createdAt: Date.now() }
-      setBusy('Saving…')
-      const n = await saveDeck(deck)
-      onCreated(n.id)
+      if (method === 'ai') {
+        // AI step 1: the storyline
+        const { makeOutline } = await import('../lib/deckAI')
+        const o = await makeOutline(text, opts(), setBusy)
+        const meta = { title, src }
+        setSrcMeta(meta)
+        if (review) { setOutline(o); setBusy(''); return }
+        return design(o, meta)
+      }
+      if (slides[0]?.layout !== 'title') slides.unshift({ id: crypto.randomUUID().slice(0, 8), layout: 'title', title })
+      await finish({ v: 1, theme, title: title || 'Presentation', slides, source: src, made: method, createdAt: Date.now() })
     } catch (e) { setError((e as Error).message || 'Something went wrong.'); setBusy('') }
   }
 
@@ -95,10 +109,11 @@ export function DeckMaker({ source, onClose, onCreated }: { source?: DeckSource;
         className={`flex w-full flex-col overflow-hidden border-line bg-pop text-ink shadow-2xl ${phone ? 'animate-sheet max-h-[94dvh] rounded-t-3xl border-t' : 'animate-pop max-h-[92vh] max-w-3xl rounded-2xl border'}`}>
         <header className="flex shrink-0 items-center gap-2 px-5 pb-3 pt-4">
           <Presentation size={19} className="text-accent" />
-          <h2 className="text-[17px] font-semibold">Make a presentation</h2>
+          <h2 className="text-[17px] font-semibold">{outline ? 'Review the storyline' : 'Make a presentation'}</h2>
           <button type="button" aria-label="Close" onClick={onClose} disabled={!!busy} className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-ink-2 hover:bg-wash disabled:opacity-40"><X size={18} /></button>
         </header>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pb-4">
+          {outline ? <OutlineEditor outline={outline} onChange={setOutline} busy={!!busy} /> : <>
           {/* 1 · from */}
           <section aria-labelledby="dm-from">
             <h3 id="dm-from" className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">From</h3>
@@ -152,10 +167,13 @@ export function DeckMaker({ source, onClose, onCreated }: { source?: DeckSource;
               <div className="mt-3 space-y-2.5 rounded-xl border border-line p-3">
                 <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Purpose">{PURPOSES.map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={purpose === k} onClick={() => setPurpose(k)} className={chip(purpose === k)}>{l}</button>)}</div>
                 <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Length">{LENGTHS.map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={length === k} onClick={() => setLength(k)} className={chip(length === k)}>{l}</button>)}</div>
+                <input value={audience} onChange={(e) => setAudience(e.target.value)} aria-label="Who is it for" placeholder="Who is it for? e.g. “the client’s board”, “new interns”"
+                  className="w-full rounded-lg border border-line bg-canvas px-3 py-2 text-[13.5px] outline-none focus:border-accent" />
                 <Switch label={<span className="text-[13px]">Speaker notes for each slide</span>} checked={speaker} onChange={setSpeaker} />
+                <Switch label={<span className="text-[13px]">Let me review the storyline first</span>} checked={review} onChange={setReview} />
                 <input value={extra} onChange={(e) => setExtra(e.target.value)} aria-label="Anything else" placeholder="Anything else? e.g. “for the client, focus on cost and timeline”"
                   className="w-full rounded-lg border border-line bg-canvas px-3 py-2 text-[13.5px] outline-none focus:border-accent" />
-                <p className="text-[11.5px] text-faint">Sent to Groq with your key only when you press Create. Long sources are read in parts.</p>
+                <p className="text-[11.5px] text-faint">Uses GPT-OSS 120B, the best model on Groq’s free plan, with your key — only when you press Create. Long sources are read in parts; on the free plan a big deck can take a minute or two.</p>
               </div>
             )}
           </section>
@@ -176,13 +194,63 @@ export function DeckMaker({ source, onClose, onCreated }: { source?: DeckSource;
               })}
             </div>
           </section>
+          </>}
           {error && <p role="alert" className="rounded-lg border border-danger/40 px-3 py-2 text-[13px] text-ink">{error}</p>}
         </div>
         <footer className="flex shrink-0 items-center gap-3 border-t border-line px-5 py-3 pb-[max(env(safe-area-inset-bottom),12px)]">
-          <p aria-live="polite" className="min-w-0 flex-1 truncate text-[12.5px] text-muted">{busy || (ready ? `From “${sourceName}”` : 'Choose what to make it from')}</p>
-          <button type="button" onClick={onClose} disabled={!!busy} className="rounded-lg px-4 py-2 text-[14px] text-muted hover:bg-wash disabled:opacity-40">Cancel</button>
-          <button type="button" onClick={run} disabled={!ready || !!busy} className="rounded-lg bg-accent px-4 py-2 text-[14px] font-semibold text-on-accent disabled:opacity-50">{busy ? 'Working…' : 'Create presentation'}</button>
+          <p aria-live="polite" className="min-w-0 flex-1 truncate text-[12.5px] text-muted">{busy || (outline ? `${outline.items.length} slides planned` : ready ? `From “${sourceName}”` : 'Choose what to make it from')}</p>
+          {outline ? <>
+            <button type="button" onClick={() => setOutline(null)} disabled={!!busy} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[14px] text-muted hover:bg-wash disabled:opacity-40"><ArrowLeft size={15} /> Back</button>
+            <button type="button" onClick={() => { setBusy('Designing the slides…'); void design(outline) }} disabled={!!busy || !outline.items.length} className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-[14px] font-semibold text-on-accent disabled:opacity-50"><Sparkles size={15} /> {busy ? 'Working…' : `Design ${outline.items.length} slides`}</button>
+          </> : <>
+            <button type="button" onClick={onClose} disabled={!!busy} className="rounded-lg px-4 py-2 text-[14px] text-muted hover:bg-wash disabled:opacity-40">Cancel</button>
+            <button type="button" onClick={run} disabled={!ready || !!busy} className="rounded-lg bg-accent px-4 py-2 text-[14px] font-semibold text-on-accent disabled:opacity-50">{busy ? 'Working…' : method === 'ai' && review ? 'Plan the storyline' : 'Create presentation'}</button>
+          </>}
         </footer>
       </div>
     </div>, document.body)
+}
+
+const AI_CHOICES: Layout[] = ['title', 'agenda', 'section', 'bullets', 'two', 'stat', 'quote', 'table', 'process', 'flow', 'cycle', 'timeline', 'chart', 'matrix', 'closing']
+const layoutName = (l: Layout) => LAYOUTS.find((x) => x.k === l)?.label ?? l
+
+/** Step between planning and designing: the storyline as an editable list (like Gamma's outline). */
+function OutlineEditor({ outline, onChange, busy }: { outline: Outline; onChange: (o: Outline) => void; busy: boolean }) {
+  const set = (items: OutlineItem[]) => onChange({ ...outline, items })
+  const patch = (i: number, p: Partial<OutlineItem>) => set(outline.items.map((x, k) => (k === i ? { ...x, ...p } : x)))
+  const move = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= outline.items.length) return; const a = [...outline.items]; [a[i], a[j]] = [a[j], a[i]]; set(a) }
+  const field = 'w-full rounded-lg border border-line bg-canvas px-2.5 py-1.5 text-[14px] outline-none focus:border-accent disabled:opacity-60'
+  return (
+    <div className="space-y-3">
+      <p className="text-[13.5px] leading-5 text-muted">Here’s the storyline. Each title says the slide’s point. Change titles, layouts or order, drop what you don’t need — then design the slides.</p>
+      <label className="block text-[12px] font-medium text-muted">Presentation title
+        <input className={`${field} mt-1 font-semibold`} value={outline.title} disabled={busy} onChange={(e) => onChange({ ...outline, title: e.target.value })} /></label>
+      <ol className="space-y-2" aria-label="Storyline">
+        {outline.items.map((it, i) => (
+          <li key={it.id} className="rounded-xl border border-line bg-surface/50 p-2.5">
+            <div className="flex items-center gap-2">
+              <span className="w-6 shrink-0 text-right text-[12.5px] font-semibold tabular-nums text-accent-ink">{i + 1}</span>
+              <input aria-label={`Slide ${i + 1} title`} className={`${field} min-w-0 flex-1`} value={it.title} disabled={busy} onChange={(e) => patch(i, { title: e.target.value })} />
+              <select aria-label={`Slide ${i + 1} layout`} value={it.layout} disabled={busy} onChange={(e) => patch(i, { layout: e.target.value as Layout })} className="w-32 shrink-0 rounded-lg border border-line bg-canvas px-2 py-1.5 text-[12.5px] outline-none focus:border-accent">
+                {AI_CHOICES.map((l) => <option key={l} value={l}>{layoutName(l)}</option>)}
+              </select>
+              <div className="flex shrink-0">
+                <button type="button" aria-label={`Move slide ${i + 1} up`} disabled={busy || i === 0} onClick={() => move(i, -1)} className="flex h-8 w-7 items-center justify-center rounded-md text-muted hover:bg-wash disabled:opacity-30"><ArrowUp size={14} /></button>
+                <button type="button" aria-label={`Move slide ${i + 1} down`} disabled={busy || i === outline.items.length - 1} onClick={() => move(i, 1)} className="flex h-8 w-7 items-center justify-center rounded-md text-muted hover:bg-wash disabled:opacity-30"><ArrowDown size={14} /></button>
+                <button type="button" aria-label={`Remove slide ${i + 1}`} disabled={busy || outline.items.length <= 1} onClick={() => set(outline.items.filter((_, k) => k !== i))} className="flex h-8 w-7 items-center justify-center rounded-md text-muted hover:bg-wash hover:text-danger disabled:opacity-30"><Trash2 size={14} /></button>
+              </div>
+            </div>
+            {it.layout !== 'title' && (
+              <textarea aria-label={`Slide ${i + 1} points`} rows={Math.min(5, Math.max(1, it.points.length))} disabled={busy} value={it.points.join('\n')}
+                onChange={(e) => patch(i, { points: e.target.value.split('\n') })} onBlur={() => patch(i, { points: it.points.map((p) => p.trim()).filter(Boolean) })}
+                placeholder="What this slide covers — one fact per line"
+                className="ml-8 mt-1.5 block w-[calc(100%-2rem)] resize-y rounded-lg border border-transparent bg-transparent px-2.5 py-1 text-[12.5px] leading-5 text-muted outline-none hover:border-line focus:border-accent focus:text-ink" />
+            )}
+          </li>
+        ))}
+      </ol>
+      <button type="button" disabled={busy} onClick={() => { const a = [...outline.items]; a.splice(Math.max(1, a.length - (a[a.length - 1]?.layout === 'closing' ? 1 : 0)), 0, { id: crypto.randomUUID().slice(0, 8), layout: 'bullets', title: '', points: [] }); set(a) }}
+        className="flex items-center gap-1.5 rounded-lg border border-dashed border-line px-3 py-2 text-[13px] text-ink-2 hover:border-accent/60 disabled:opacity-50"><Plus size={14} /> Add a slide</button>
+    </div>
+  )
 }

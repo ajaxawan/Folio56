@@ -1,7 +1,7 @@
 // V5.3 checks: iPhone layout + voice memos (fake microphone, Groq mocked). Needs `npm run preview` on :4174.
 const { chromium, devices } = require('playwright');
 const OUT = process.env.OUT || __dirname + '/../qa/v53'; require('fs').mkdirSync(OUT, { recursive: true });
-const URL = 'http://localhost:4174';
+const URL = 'http://localhost:4174/app';
 const results = []; const ok = (name, pass, info = '') => { results.push({ name, pass: !!pass, info }); console.log(pass ? 'PASS' : 'FAIL', name, info) };
 
 const MINUTES = `# Weekly site review

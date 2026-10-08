@@ -1,4 +1,4 @@
-# Folio — 6.1 (web app)
+# Folio56 — 6.2 (web app)
 
 Private, offline notes: Google Keep outside, Notion inside.
 Everything is stored in the browser on each device (IndexedDB). No accounts, no server, no cloud database.
@@ -23,6 +23,19 @@ Export a backup in Settings first, just in case. Drop the whole folder (not just
 3. Open the URL on the laptop (Chrome/Edge → Install app) and on the Tab A9 (Chrome → ⋮ → Add to Home screen / Install).
 
 Vercel only serves the app's static files; your notes never go to Vercel. After the first load, the app works fully offline.
+
+## New in 6.2 — Welcome
+
+- **A welcome page at `/`, the app at `/app/`.** The welcome page (`index.html`, assets in `public/welcome/`) is plain HTML with no app code, so it opens instantly. Anyone who has used Folio56 in this browser — the app sets a flag, and older users are recognised by their notes — goes straight to `/app/`, as do installed apps and every old link (`/#p=…` share links, `/?new=…` shortcuts, the share target). `/welcome` always shows the page.
+- **Installed apps keep working.** The manifest keeps `id: "/"`, so copies installed before 6.2 stay the same app; it now starts at `/app/`, and shortcuts, the share target and “Open with” for PDFs point there. Offline, any `/app/…` address opens the app.
+- **First run.** A brand-new browser gets a short welcome: your name, dark or light, then a pinned *Welcome to Folio56* guide note that teaches by being used. Skip it if you like; people who already have notes never see it. Settings → About shows the version, the welcome page and *Show the welcome guide*.
+- **Backups that know the risk.** If the browser might clear Folio56 on its own — Safari’s 7-day rule, or storage the browser hasn’t promised to keep — the reminder comes sooner and says why, and on Chrome/Edge it offers daily backups to a folder in one tap.
+- **Presentations, rebuilt.** AI decks now work like the best tools: first a *storyline* you can edit (action titles that state each slide's point, the layout for each, the facts it will use), then the slides. The AI uses **GPT-OSS 120B**, the strongest model on Groq's free plan, held to a strict JSON schema so every answer is valid; requests are sized to fit the free 8,000-tokens-a-minute limit, Folio56 waits when it's reached, and if the wait would be long, GPT-OSS 20B (which has its own allowance) steps in. Seven new visual layouts — **flowchart** (with decisions, branches and loops), **process**, **cycle**, **timeline**, **chart** (column, bar, line, pie), **2 × 2 matrix** and **agenda** — drawn from one shared geometry, so the preview, Present mode, the PDF and PowerPoint match. In PowerPoint they're native shapes and arrows, and charts are real, editable charts. No pictures are generated or fetched.
+- **Number check.** Every figure on an AI slide is checked against your source (on this device, no AI); anything not found is flagged on the slide and its thumbnail until you fix it or confirm it. Only the source's figures are kept with the deck — never a PDF's text.
+- **Presenter view** (press P while presenting): this slide, the next one, your notes, a timer and the clock. **Make it visual** turns a list slide into the best-fitting diagram. *From headings* (no AI) now spots numbered steps (→ process), dated lists (→ timeline) and adds an agenda when a note has three or more parts.
+- **Fixes:** a checked checklist item that wraps onto two lines is now struck through on every line (it looked like an underline on cards, Today and Tasks). The “56” in the logo is readable on light themes.
+
+**Deploying 6.2:** clear the project folder except `.git`, unzip, push. `vercel.json` now routes `/app/…` to the app and everything else to the welcome page.
 
 ## New in 6.1 — Presentations
 

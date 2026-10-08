@@ -4,6 +4,7 @@ import { collectBackup, db, download, mergeBackup, revOf, type Backup } from './
 import { todayKey } from './templates'
 import type { Note } from '../types'
 import { useEffect, useState } from 'react'
+import { isIOS, isStandalone } from './mobile'
 
 const DAY = 86400e3
 type DirHandle = FileSystemDirectoryHandle & {
@@ -82,15 +83,34 @@ export async function autoBackup() {
   return true
 }
 
-/** Whether to show the reminder: some notes worth keeping, and no backup for a week. */
+/**
+ * V6.2: why this browser's notes could disappear without anyone deleting them.
+ * 'safari' — Safari (and every iPhone/iPad browser) may clear a site's data after 7 days without a visit,
+ *            unless it's added to the Home Screen / Dock.
+ * 'eviction' — the browser hasn't promised to keep Folio's storage, so it may clear it when space runs low.
+ */
+export type BackupRisk = null | 'safari' | 'eviction'
+export async function backupRisk(): Promise<BackupRisk> {
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  const safari = isIOS || (/Safari\//.test(ua) && !/Chrome|Chromium|Edg\/|OPR\/|Firefox|Android/.test(ua))
+  if (safari && !isStandalone()) return 'safari'
+  try { if (navigator.storage?.persisted && !(await navigator.storage.persisted())) return 'eviction' } catch { /* unknown */ }
+  return null
+}
+
+/**
+ * Whether to show the reminder: some notes worth keeping, and no recent backup — a week normally,
+ * sooner when the browser might clear its storage on its own.
+ */
 export async function needsReminder(noteCount: number) {
-  if (noteCount < 5) return false
+  const risk = await backupRisk()
+  if (noteCount < (risk ? 3 : 5)) return false
   const snooze = (await db.meta.get('backupSnooze'))?.value as number | undefined
   if (snooze && Date.now() < snooze) return false
   const last = await lastBackup()
-  if (last) return Date.now() - last > 7 * DAY
+  if (last) return Date.now() - last > (risk ? 3 : 7) * DAY
   const first = await db.notes.orderBy('updatedAt').first()
-  return !!first && Date.now() - Math.min(first.createdAt, first.updatedAt) > 3 * DAY
+  return !!first && Date.now() - Math.min(first.createdAt, first.updatedAt) > (risk ? 1 : 3) * DAY
 }
 export async function snoozeReminder(days = 3) { await db.meta.put({ key: 'backupSnooze', value: Date.now() + days * DAY }) }
 

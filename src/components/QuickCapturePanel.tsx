@@ -1,10 +1,11 @@
 import { Check, Copy } from 'lucide-react'
 import { useState } from 'react'
 import { isIOS } from '../lib/mobile'
+import { APP_PATH } from '../lib/paths'
 
 /** Settings → Quick capture: links that open Folio straight into recording, a new note or a task. */
 export function QuickCapturePanel() {
-  const base = location.origin
+  const base = location.origin + APP_PATH.replace(/\/$/, '')
   const links: [string, string][] = [
     ['Record a voice memo', `${base}/?record=memo`],
     ['Speak today’s journal', `${base}/?record=journal`],

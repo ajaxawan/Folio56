@@ -2,7 +2,7 @@
 // quick-capture links, stacks, label colours, swipe. Needs `npm run preview` on :4174. Groq is mocked.
 const { chromium, devices } = require('playwright');
 const OUT = process.env.OUT || __dirname + '/../qa/v54'; require('fs').mkdirSync(OUT, { recursive: true });
-const URL = 'http://localhost:4174';
+const URL = 'http://localhost:4174/app';
 const results = []; const ok = (name, pass, info = '') => { results.push({ name, pass: !!pass, info }); console.log(pass ? 'PASS' : 'FAIL', name, info) };
 const iso = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` };
 

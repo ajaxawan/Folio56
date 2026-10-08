@@ -2,7 +2,7 @@
 // cards don't re-animate, notes open fast, dialogs are solid, nav isn't duplicated, note checkboxes
 // are styled; Margins cleans Office titles, zooms with ctrl+scroll in place, frees far pages.
 const { chromium } = require('playwright');
-const URL = process.env.URL || 'http://localhost:4174';
+const URL = process.env.URL || 'http://localhost:4174/app';
 const results = []; const ok = (n, p, i = '') => { results.push({ n, p: !!p }); console.log(p ? 'PASS' : 'FAIL', n, i) };
 
 const seed = (n) => new Promise((res) => {

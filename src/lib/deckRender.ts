@@ -1,19 +1,38 @@
 // Slide types, the eight deck themes and the one HTML renderer every view uses (kept small: the
 // note cards draw a deck's title slide from here).
 export type Layout = 'title' | 'section' | 'bullets' | 'two' | 'quote' | 'stat' | 'table' | 'image' | 'closing'
+  // V6.2 visual layouts — drawn as diagrams, never pictures
+  | 'agenda' | 'process' | 'flow' | 'cycle' | 'timeline' | 'chart' | 'matrix'
 export interface Column { heading?: string; bullets: string[] }
+export interface Item { label: string; detail?: string; when?: string }
+export interface Chart { kind: 'column' | 'bar' | 'line' | 'pie'; unit?: string; series?: string; data: { label: string; value: number }[] }
+export interface Matrix { x: string; y: string; quads: { title: string; points: string[] }[] }
+export type { Flow, FlowNode } from './deckDiagrams'
 export interface Slide {
   id: string; layout: Layout; title: string; subtitle?: string; bullets?: string[]
   left?: Column; right?: Column; stats?: { value: string; label: string }[]
   quote?: { text: string; by?: string }; table?: { head: string[]; rows: string[][] }
   image?: string | null; notes?: string
+  /** process, cycle, timeline, agenda */
+  items?: Item[]
+  chart?: Chart
+  matrix?: Matrix
+  flow?: import('./deckDiagrams').Flow
+  /** Numbers on this slide that weren't found in the source (V6.2 number check). */
+  check?: string[]
 }
-export interface Deck { v: 1; theme: string; title: string; subtitle?: string; slides: Slide[]; source?: { kind: 'note' | 'markdown' | 'pdf'; name: string; id?: string }; made: 'ai' | 'outline' | 'pages'; createdAt: number }
+export interface Deck { v: 1; theme: string; title: string; subtitle?: string; slides: Slide[]; source?: { kind: 'note' | 'markdown' | 'pdf'; name: string; id?: string }; made: 'ai' | 'outline' | 'pages'; createdAt: number
+  /** V6.2: the figures found in the source (for the number check), never the source itself */
+  figures?: string[] }
 
 export const LAYOUTS: { k: Layout; label: string }[] = [
   { k: 'title', label: 'Title' }, { k: 'section', label: 'Section' }, { k: 'bullets', label: 'Bullets' }, { k: 'two', label: 'Two columns' },
   { k: 'stat', label: 'Big numbers' }, { k: 'quote', label: 'Quote' }, { k: 'table', label: 'Table' }, { k: 'image', label: 'Picture' }, { k: 'closing', label: 'Closing' },
+  { k: 'agenda', label: 'Agenda' }, { k: 'process', label: 'Process' }, { k: 'flow', label: 'Flowchart' }, { k: 'cycle', label: 'Cycle' },
+  { k: 'timeline', label: 'Timeline' }, { k: 'chart', label: 'Chart' }, { k: 'matrix', label: '2 × 2' },
 ]
+/** The visual layouts, for menus that group them. */
+export const VISUAL: Layout[] = ['agenda', 'process', 'flow', 'cycle', 'timeline', 'chart', 'matrix']
 
 // ---------------------------------------------------------------- themes
 export interface DeckTheme {
@@ -37,6 +56,7 @@ export const themeOf = (k?: string) => DECK_THEMES.find((t) => t.key === k) ?? D
 
 // ---------------------------------------------------------------- drawing a slide (HTML, 1280 × 720)
 export const W = 1280, H = 720
+import { pieHtml, sceneFor, sceneHtml } from './deckDiagrams'
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
 /** **bold** inside slide text. */
 const rich = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
@@ -49,6 +69,9 @@ export const DECK_CSS = `
 .dk .t{font-family:var(--tf);font-weight:700;letter-spacing:-.01em;line-height:1.12;margin:0}
 .dk .pad{position:absolute;inset:64px 88px 70px}
 .dk h2.t{font-size:50px;margin-bottom:30px}
+.dk h2.t.long{font-size:40px}
+.dk h2.t.longer{font-size:34px}
+.dk .tk{position:absolute;left:88px;right:88px;top:${H - 112}px;font-size:22px;color:var(--muted)}
 .dk ul{margin:0;padding:0;list-style:none}
 .dk li{position:relative;padding-left:34px;margin:0 0 16px}
 .dk li::before{content:"";position:absolute;left:4px;top:.55em;width:11px;height:11px;border-radius:3px;background:var(--accent)}
@@ -78,6 +101,7 @@ export const DECK_CSS = `
 .dk .imgnote{position:absolute;top:150px;right:88px;width:400px}
 .dk .bleed{position:absolute;inset:0;background-size:contain;background-repeat:no-repeat;background-position:center;background-color:var(--bg)}
 .dk .empty{color:var(--muted);font-style:italic}
+.dk .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 /* decor */
 .dk[data-decor=rule] .pad h2.t{padding-bottom:20px;border-bottom:3px solid var(--accent);display:inline-block;padding-right:40px}
 .dk[data-decor=glow]::after{content:"";position:absolute;width:760px;height:760px;right:-260px;top:-300px;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--accent) 38%,transparent),transparent);pointer-events:none}
@@ -103,7 +127,8 @@ export function renderSlide(s: Slide, t: DeckTheme, m: Meta, imageUrl?: string |
     (t.hero ? `--hbg:${t.hero.css ?? t.hero.bg};--hfg:${t.hero.fg};--hmuted:${t.hero.muted};` : '') + (isHero ? `background:var(--hbg);color:var(--hfg);` : '')
   const foot = s.layout === 'title' ? '' : `<div class="foot"><span>${esc(m.deckTitle)}</span><span>${m.index + 1} / ${m.total}</span></div>`
   const list = (b: string[] = []) => b.length ? `<ul>${b.map((x) => `<li>${rich(x)}</li>`).join('')}</ul>` : ''
-  const title = (x: string) => `<h2 class="t">${rich(x || ' ')}</h2>`
+  // action titles (a full sentence) are welcome — long ones get smaller rather than wrapping three times
+  const title = (x: string) => `<h2 class="t ${(x || '').length > 75 ? 'longer' : (x || '').length > 38 ? 'long' : ''}">${rich(x || ' ')}</h2>`
   let body = ''
   switch (s.layout) {
     case 'title':
@@ -136,6 +161,14 @@ export function renderSlide(s: Slide, t: DeckTheme, m: Meta, imageUrl?: string |
       if (!s.title && !(s.bullets ?? []).length) { body = imageUrl ? `<div class="bleed" style="background-image:url('${imageUrl}')"></div>` : `<div class="pad"><p class="empty">Add a picture</p></div>`; break }
       body = `<div class="pad">${title(s.title)}</div><div class="imgbox ${(s.bullets ?? []).length ? 'side' : ''}"><div class="img" style="${imageUrl ? `background-image:url('${imageUrl}')` : ''}"></div>${imageUrl ? '' : '<p class="empty" style="padding:30px">Add a picture</p>'}</div>${(s.bullets ?? []).length ? `<div class="imgnote">${list(s.bullets)}</div>` : ''}`
       break
+    case 'agenda': case 'process': case 'flow': case 'cycle': case 'timeline': case 'chart': case 'matrix': {
+      const font = '"Segoe UI","Helvetica Neue",Arial,system-ui,sans-serif'
+      const draw = s.layout === 'chart' && s.chart?.kind === 'pie' ? pieHtml(s, t, font) : sceneHtml(sceneFor(s, t)!, font, FONTS[t.font], s.id)
+      const sc = sceneFor(s, t)
+      const empty = !sc?.prims.length && !(s.layout === 'chart' && s.chart?.data.length)
+      body = `<div class="pad">${title(s.title || (s.layout === 'agenda' ? 'Agenda' : ''))}</div>${empty ? '<div class="pad" style="top:200px"><p class="empty">Add the content in the panel on the right</p></div>' : draw}${s.layout !== 'cycle' && s.subtitle ? `<div class="tk">${rich(s.subtitle)}</div>` : ''}<span class="sr">${esc(sc?.alt ?? '')}</span>`
+      break
+    }
     default: {
       const b = s.bullets ?? []
       body = `<div class="pad">${title(s.title)}${b.length > 7 ? `<div class="cols">${[b.slice(0, Math.ceil(b.length / 2)), b.slice(Math.ceil(b.length / 2))].map((x) => `<div>${list(x)}</div>`).join('')}</div>` : list(b)}${s.subtitle ? `<div class="sub" style="font-size:24px">${rich(s.subtitle)}</div>` : ''}</div>`

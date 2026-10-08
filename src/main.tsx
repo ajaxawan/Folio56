@@ -7,6 +7,8 @@ import { ErrorBoundary, UpdateToast } from './components/Safety'
 import { stopInputZoomOnIOS, watchKeyboard } from './lib/mobile'
 
 stopInputZoomOnIOS()
+// Remember that this browser uses the app, so the welcome page sends it straight here next time.
+try { localStorage.setItem('folio.app', '1') } catch { /* private mode */ }
 watchKeyboard()
 
 createRoot(document.getElementById('root')!).render(

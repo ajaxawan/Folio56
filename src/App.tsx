@@ -32,8 +32,10 @@ import { todayKey } from './lib/templates'
 import { usePhone } from './lib/mobile'
 import { InstallHint } from './components/InstallHint'
 import { BackupReminder } from './components/BackupBits'
+import { WelcomeCard } from './components/WelcomeCard'
 import { Toaster } from './components/Toaster'
 import { toast } from './lib/toast'
+import { APP_PATH } from './lib/paths'
 import { LIGHT_THEMES, THEMES, usePrefs } from './lib/prefs'
 import type { Label, Note, View } from './types'
 
@@ -79,7 +81,8 @@ const isTyping = () => { const a = document.activeElement as HTMLElement | null;
 export default function App() {
   const { prefs, set, dark } = usePrefs()
   // Template working copies (V6) are notes too, but never shown as notes.
-  const notes = useLiveQuery(() => db.notes.filter((n) => !n.templateDraft).toArray(), []) ?? NO_NOTES
+  const notesRaw = useLiveQuery(() => db.notes.filter((n) => !n.templateDraft).toArray(), [])
+  const notes = notesRaw ?? NO_NOTES
   const liveCount = useMemo(() => notes.filter((n) => n.trashedAt === null).length, [notes])
   const labels = useLiveQuery(() => db.labels.orderBy('name').toArray(), []) ?? NO_LABELS
   useMemo(() => registerLabels(labels), [labels])
@@ -228,7 +231,7 @@ export default function App() {
     const q = new URLSearchParams(location.search)
     const has = (k: string) => q.has(k)
     if (['new', 'task', 'record', 'today', 'view'].some(has)) {
-      history.replaceState(null, '', '/')
+      history.replaceState(null, '', APP_PATH)
       ;(async () => {
         if (has('new')) {
           const t = (q.get('new') ?? '').trim()
@@ -252,7 +255,7 @@ export default function App() {
     }
     // Android share target (manifest): "Share → Folio" arrives as /?text=…&url=…
     else if (q.has('text') || q.has('url')) {
-      history.replaceState(null, '', '/')
+      history.replaceState(null, '', APP_PATH)
       open(`${q.get('url') ?? ''} ${q.get('text') ?? ''}`)
     }
     window.addEventListener('hashchange', fromAddress)
@@ -557,6 +560,7 @@ export default function App() {
                   <div className="mx-auto max-w-[1400px]">
                     {view.kind === 'notes' && <InstallHint />}
                     {view.kind === 'notes' && <BackupReminder noteCount={notes.length} />}
+                    {view.kind === 'notes' && <WelcomeCard noteCount={notes.length} loaded={notesRaw !== undefined} onOpen={openNote} />}
                     {view.kind === 'notes' && <div className="pt-3 max-sm:pt-1"><TodayHero notes={notes} onOpenToday={today} onReview={() => setView({ kind: 'review' })} onTasks={() => setView({ kind: 'tasks' })} onJournal={() => setRecording('journal')} onOpen={openNote} /></div>}
                     {showComposer && list.length === 0 && view.kind === 'notes' ? (
                       <div className="flex flex-col items-center justify-center gap-5 py-6">
@@ -638,7 +642,7 @@ export default function App() {
         {templates && <TemplateGallery labelIds={labelCtx} onClose={() => setTemplates(false)} onCreated={(id) => { setTemplates(false); openNote(id) }} onEdit={(id) => { setTemplates(false); openNote(id) }} />}
         {exporting && <ExportDialog scope={exporting} onClose={() => setExporting(null)} />}
         {deckMaker && <DeckMaker onClose={() => setDeckMaker(false)} onCreated={(id) => { setDeckMaker(false); openNote(id) }} />}
-        {settings && <SettingsDialog noteCount={liveCount} onClose={() => setSettings(false)} onImport={() => setImporting([])} onExport={() => { setSettings(false); setExporting({ all: true }) }} onTemplates={() => { setSettings(false); setTemplates(true) }} />}
+        {settings && <SettingsDialog noteCount={liveCount} onClose={() => setSettings(false)} onImport={() => setImporting([])} onExport={() => { setSettings(false); setExporting({ all: true }) }} onTemplates={() => { setSettings(false); setTemplates(true) }} onWelcome={async () => { const { addWelcomeNote } = await import('./lib/welcome'); openNote(await addWelcomeNote()) }} />}
         {parcelReq && <ParcelHost onOpenNote={openNote} />}
         {stackHint && <SeriesSheet ids={stackHint.ids} suggestion={stackHint.name} onClose={() => setStackHint(null)} />}
         {stackIds && <SeriesSheet ids={stackIds} onClose={() => setStackIds(null)} suggestion={labels.find((l) => stackIds.every((id) => notes.find((n) => n.id === id)?.labels.includes(l.id)))?.name} />}

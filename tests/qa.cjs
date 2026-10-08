@@ -3,7 +3,7 @@
 // Folio full QA run. Each check is independent; failures are collected with a screenshot.
 const { chromium } = require('playwright');
 const fs = require('fs'); const path = require('path');
-const URL = 'http://localhost:4174';
+const URL = 'http://localhost:4174/app';
 const SP = __dirname;
 const OUT = require('path').join(__dirname, '..', 'qa-out'); fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 const PHOTO = path.join(SP, 'photo.jpg');

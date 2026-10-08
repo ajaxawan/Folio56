@@ -7,6 +7,7 @@
 //   payload    = deflate(JSON { v, from, at, notes, labels })
 
 import { deflateSync, inflateSync, strFromU8, strToU8 } from 'fflate'
+import { appUrl } from './paths'
 import type { Label, Note } from '../types'
 import { b64, openBytes, sealBytes, unb64 } from './crypto'
 import { db, descendants, revOf } from './db'
@@ -107,7 +108,7 @@ const concat = (parts: Uint8Array[]) => {
 // ---------- link ----------
 /** Link with the parcel in the #fragment. `withCode` puts the code in the link too (anyone with the link can open it). */
 export function toLink(bytes: Uint8Array, code: string | null, withCode: boolean) {
-  const base = `${location.origin}/`
+  const base = appUrl()
   const frag = `${LINK_KEY}=${toUrl(b64(bytes))}${withCode && code ? `.${normCode(code)}` : ''}`
   return `${base}#${frag}`
 }

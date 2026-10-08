@@ -1,6 +1,7 @@
 import { FolderOpen, HardDriveDownload, ShieldCheck, Upload, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { applyRestore, backupFolder, backupNow, canUseFolder, chooseFolder, lastBackup, needsReminder, previewBackup, snoozeReminder, stopFolder, type RestorePreview } from '../lib/backup'
+import { applyRestore, backupFolder, backupNow, backupRisk, canUseFolder, chooseFolder, lastBackup, needsReminder, previewBackup, snoozeReminder, stopFolder, type BackupRisk, type RestorePreview } from '../lib/backup'
+import { isIOS } from '../lib/mobile'
 import { pickFile } from '../lib/image'
 import { toast } from '../lib/toast'
 import { Modal } from './ui'
@@ -15,7 +16,9 @@ const ago = (t: number | null) => {
 export function BackupReminder({ noteCount }: { noteCount: number }) {
   const [show, setShow] = useState(false)
   const [last, setLast] = useState<number | null>(null)
-  const check = useCallback(() => { needsReminder(noteCount).then(setShow); lastBackup().then(setLast) }, [noteCount])
+  const [risk, setRisk] = useState<BackupRisk>(null)
+  const [folder, setFolder] = useState(true)
+  const check = useCallback(() => { needsReminder(noteCount).then(setShow); lastBackup().then(setLast); backupRisk().then(setRisk); backupFolder().then((d) => setFolder(!!d)) }, [noteCount])
   useEffect(() => { check(); document.addEventListener('folio:backup', check); return () => document.removeEventListener('folio:backup', check) }, [check])
   if (!show) return null
   return (
@@ -23,9 +26,15 @@ export function BackupReminder({ noteCount }: { noteCount: number }) {
       <ShieldCheck size={18} className="shrink-0 text-accent" />
       <p className="min-w-0 flex-1 basis-[220px] text-[13.5px] leading-5 text-ink-2">
         <b className="font-medium text-ink">Keep a copy of your notes.</b> They live only in this browser{last ? ` — last backup ${ago(last)}` : ', and they haven’t been backed up yet'}.
+        {risk === 'safari' && <span className="mt-0.5 block text-muted">Safari can clear a website’s data after 7 days without a visit. {isIOS ? 'Adding Folio56 to your Home Screen keeps it safe.' : 'Adding Folio56 to the Dock (File → Add to Dock) keeps it safe.'}</span>}
+        {risk === 'eviction' && <span className="mt-0.5 block text-muted">This browser hasn’t promised to keep Folio56’s storage, so it may clear it if the device runs low on space.</span>}
       </p>
       <button type="button" onClick={async () => { try { toast(await backupNow()); setShow(false) } catch (e) { toast((e as Error).message) } }}
         className="rounded-full bg-accent px-3.5 py-1.5 text-[13px] font-medium text-on-accent">Back up now</button>
+      {canUseFolder() && !folder && (
+        <button type="button" onClick={async () => { try { const d = await chooseFolder(); toast(`Backed up to “${d.name}”. Folio56 will keep a daily copy there.`); setShow(false) } catch { /* cancelled */ } }}
+          className="rounded-full border border-line px-3.5 py-1.5 text-[13px] text-ink-2 hover:bg-wash">Back up daily to a folder…</button>
+      )}
       <button type="button" aria-label="Remind me later" title="Remind me in a few days" onClick={() => { snoozeReminder(); setShow(false) }}
         className="absolute right-1.5 top-1.5 flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-wash"><X size={16} /></button>
     </div>

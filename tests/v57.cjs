@@ -4,7 +4,7 @@
 const { chromium, devices } = require('playwright');
 const fs = require('fs');
 const path = require('path');
-const URL = process.env.URL || 'http://localhost:4174';
+const URL = process.env.URL || 'http://localhost:4174/app';
 const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const PDF = fs.readFileSync(path.join(__dirname, 'sample.pdf')).toString('base64');
 const results = []; const ok = (n, p, i = '') => { results.push({ n, p: !!p }); console.log(p ? 'PASS' : 'FAIL', n, i) };

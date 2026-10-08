@@ -3,7 +3,7 @@
 // print for long notes, tasks board, links between notes, Search 2.0, weekly review.
 const { chromium } = require('playwright');
 const fs = require('fs'); const path = require('path')
-const URL = process.env.URL || 'http://localhost:4174';
+const URL = process.env.URL || 'http://localhost:4174/app';
 const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const SHOTS = process.env.SHOTS || ''
 const results = []; const ok = (n, p, i = '') => { results.push({ n, p: !!p }); console.log(p ? 'PASS' : 'FAIL', n, i) };

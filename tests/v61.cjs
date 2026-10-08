@@ -4,7 +4,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs'); const path = require('path')
 const { unzipSync, strFromU8 } = require('fflate')
-const URL = process.env.URL || 'http://localhost:4174';
+const URL = process.env.URL || 'http://localhost:4174/app';
 const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const SHOTS = process.env.SHOTS || ''
 const TMP = fs.mkdtempSync(path.join(require('os').tmpdir(), 'folio61-'))
@@ -23,14 +23,21 @@ const AI_DECK = { title: 'Rooftop solar for Mills site', subtitle: 'Findings and
 ] }
 async function mockGroq(ctx) {
   const calls = []
+  const reply = (route, obj) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: typeof obj === 'string' ? obj : JSON.stringify(obj) }, finish_reason: 'stop' }] }) })
   await ctx.route('https://api.groq.com/**', async (route) => {
     const u = route.request().url()
     if (u.includes('/chat/completions')) {
       const body = JSON.parse(route.request().postData() || '{}'); calls.push(body)
       const sys = body.messages?.[0]?.content || ''
-      if (/edit one presentation slide/.test(sys)) return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: JSON.stringify({ slides: [{ layout: 'bullets', title: 'The roof is ideal', bullets: ['South facing', 'Strong structure'] }] }) } }] }) })
-      // the first answer comes wrapped in a code fence with chatter, like real models sometimes do
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ choices: [{ message: { content: 'Here you go:\n```json\n' + JSON.stringify(AI_DECK) + '\n```' } }] }) })
+      const name = body.response_format?.json_schema?.name
+      if (/editing one slide/.test(sys)) return reply(route, { slides: [{ layout: 'bullets', title: 'The roof is ideal', bullets: ['South facing', 'Strong structure'] }] })
+      // V6.2: first the storyline, then the slides for the planned numbers
+      if (name === 'outline') return reply(route, { title: AI_DECK.title, subtitle: AI_DECK.subtitle, slides: AI_DECK.slides.map((x) => ({ layout: x.layout, title: x.title, points: x.bullets ?? [] })) })
+      if (name === 'slides') {
+        const nums = [...body.messages[1].content.matchAll(/^(\d+)\. \[/gm)].map((m) => Number(m[1]) - 1)
+        return reply(route, { slides: nums.map((i) => AI_DECK.slides[i]) })
+      }
+      return reply(route, 'Here you go:\n```json\n' + JSON.stringify(AI_DECK) + '\n```')
     }
     return route.fulfill({ status: 404, body: '' })
   })
@@ -168,9 +175,11 @@ const dbNotes = (p) => p.evaluate(() => new Promise((res) => { const r = indexed
   await dm.getByRole('radio', { name: 'Pitch' }).click(); await dm.getByRole('radio', { name: /Short/ }).click()
   await dm.getByLabel('Anything else').fill('for the client')
   await shot(p, '07-maker-ai')
-  await dm.getByRole('button', { name: 'Create presentation' }).click(); await p.waitForTimeout(2000)
+  await dm.getByRole('button', { name: 'Plan the storyline' }).click(); await p.waitForTimeout(1500)
+  ok('AI: the storyline is shown for review first', (await dm.getByRole('list', { name: 'Storyline' }).getByRole('listitem').count()) === 7)
+  await dm.getByRole('button', { name: 'Design 7 slides' }).click(); await p.waitForTimeout(2000)
   ok('AI: the request carries the purpose, length and your instruction', calls.length >= 1 && /persuasive pitch/.test(calls[0].messages[0].content) && /5 to 7/.test(calls[0].messages[0].content) && /for the client/.test(calls[0].messages[0].content) && /south facing/.test(calls[0].messages[1].content))
-  ok('AI: slides are parsed even from a fenced, chatty answer', (await slides.count()) === 7 && (await studio.inputValue()) === 'Rooftop solar for Mills site')
+  ok('AI: storyline → slides, with strict JSON', calls.some((c) => c.response_format?.json_schema?.strict === true && c.model === 'openai/gpt-oss-120b') && (await slides.count()) === 7 && (await studio.inputValue()) === 'Rooftop solar for Mills site')
   ok('AI: varied layouts (numbers, two columns, table, quote)', await p.getByRole('button', { name: /^Slide 3: What the site can produce/ }).isVisible() && (await dbNotes(p)).find((n) => n.deck?.made === 'ai').deck.slides.map((s) => s.layout).join(',') === 'title,bullets,stat,two,table,quote,closing')
   await p.getByRole('button', { name: /^Slide 2:/ }).click()
   ok('AI: speaker notes are kept', (await p.getByLabel('Speaker notes').inputValue()) === 'Start with the good news.')

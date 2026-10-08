@@ -302,7 +302,7 @@ const TaskRow = memo(function TaskRow({ t, settling, showNote, onToggle, onStar,
           {checked && <Check size={13} strokeWidth={3.2} />}
         </button>
         <button type="button" onClick={() => onOpenSheet(t)} className="min-w-0 flex-1 text-left">
-          <span className={`strike block text-[15px] leading-[21px] [overflow-wrap:anywhere] ${checked ? 'on text-muted' : 'text-ink'}`}>{t.text}</span>
+          <span className={`block text-[15px] leading-[21px] [overflow-wrap:anywhere] ${checked ? 'text-muted' : 'text-ink'}`}><span className={`strike ${checked ? 'on' : ''}`}>{t.text}</span></span>
           {(t.due || t.owner || showNote || t.doing) && (
             <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
               {t.doing && !checked && <span className="rounded-full bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] px-1.5 py-px text-[11px] font-medium text-accent-ink">In progress</span>}

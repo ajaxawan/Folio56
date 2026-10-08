@@ -207,7 +207,8 @@ input:focus, textarea:focus { outline: none; }
 .paper-grid.dense, .paper-dots.dense { background-size: 14px 14px; }
 
 /* ---------- checkbox strike animation ---------- */
-.strike { background-image: linear-gradient(currentColor, currentColor); background-repeat: no-repeat; background-position: 0 55%; background-size: 0% 1.5px; transition: background-size .28s ease, color .2s ease; }
+/* V6.2: an inline span with `clone`, so each wrapped line gets its own line through the middle (it read as an underline before) */
+.strike { background-image: linear-gradient(currentColor, currentColor); background-repeat: no-repeat; background-position: 0 58%; background-size: 0% 1.5px; transition: background-size .28s ease, color .2s ease; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .strike.on { background-size: 100% 1.5px; }
 @keyframes tick { 0% { transform: scale(.6) } 60% { transform: scale(1.18) } 100% { transform: scale(1) } }
 .tick { animation: tick .28s ease-out; }
