@@ -1,10 +1,9 @@
 import { Eye, EyeOff, KeyRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { getVoiceSettings, saveVoiceSettings, testKey, VOICE_DEFAULTS, type VoiceSettings } from '../lib/voice'
+import { FREE_MODELS, getVoiceSettings, saveVoiceSettings, testKey, VOICE_DEFAULTS, type VoiceSettings } from '../lib/voice'
 import { Segmented, Switch } from './ui'
 
 const LANGS: [string, string][] = [['', 'Detect automatically'], ['en', 'English'], ['ur', 'Urdu'], ['hi', 'Hindi'], ['ar', 'Arabic'], ['pa', 'Punjabi'], ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['zh', 'Chinese']]
-const LLMS: [string, string][] = [['openai/gpt-oss-120b', 'GPT-OSS 120B — best write-ups'], ['openai/gpt-oss-20b', 'GPT-OSS 20B — faster']]
 const field = 'w-full rounded-lg border border-line bg-canvas px-3 py-2 text-[14px] outline-none focus:border-accent'
 
 /** Settings → Voice & AI. Off until a key is added; the key never leaves this device except to Groq. */
@@ -18,9 +17,14 @@ export function VoicePanel() {
   const check = async () => {
     const k = key.trim(); if (!k) { set({ key: '' }); setMsg('Key removed. Recordings will be saved as audio only.'); return }
     setMsg('Checking the key…')
-    try { const models = await testKey(k); set({ key: k }); setMsg(`Key works ✓ ${models.some((m) => m.includes('whisper')) ? 'Speech-to-text is available.' : ''}`) } catch (e) { setMsg((e as Error).message) }
+    try {
+      const models = await testKey(k); set({ key: k })
+      const free = FREE_MODELS.filter((m) => models.includes(m.id)).map((m) => m.label)
+      setMsg(`Key works ✓ ${models.some((m) => m.includes('whisper')) ? 'Speech-to-text is available. ' : ''}${free.length ? `Models: ${free.join(', ')}.` : ''}`)
+    } catch (e) { setMsg((e as Error).message) }
   }
-  const custom = !LLMS.some(([v]) => v === s.llm)
+  const custom = !FREE_MODELS.some((m) => m.id === s.llm)
+  const chosen = FREE_MODELS.find((m) => m.id === s.llm)
   return (
     <div className="space-y-3">
       <p className="text-[12.5px] leading-5 text-muted">
@@ -50,12 +54,17 @@ export function VoicePanel() {
         <div className="mb-1 text-[12px] text-muted">Transcription</div>
         <Segmented value={s.stt} onChange={(stt) => set({ stt })} options={[{ value: 'whisper-large-v3', label: 'Most accurate' }, { value: 'whisper-large-v3-turbo', label: 'Fastest' }]} />
       </div>
-      <label className="block text-[12px] text-muted">Writing model
+      <label className="block text-[12px] text-muted">Main model
         <select value={custom ? '__custom' : s.llm} onChange={(e) => set({ llm: e.target.value === '__custom' ? '' : e.target.value })} className={`${field} mt-1`}>
-          {LLMS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}<option value="__custom">Another Groq model…</option>
+          {FREE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label} — {m.note.toLowerCase()}{m.preview ? ' (preview)' : ''}</option>)}<option value="__custom">Another Groq model…</option>
         </select>
         {custom && <input aria-label="Model id" value={s.llm} onChange={(e) => set({ llm: e.target.value.trim() })} placeholder="model id from console.groq.com" className={`${field} mt-1.5 font-mono`} />}
+        {chosen?.preview && <span className="mt-1 block text-[11.5px] leading-4 text-faint">Preview models can be changed or retired by Groq at short notice; Folio56 switches to GPT-OSS 120B if that happens.</span>}
       </label>
+      <div>
+        <Switch label="Let the other free models help when this one is busy" checked={s.spread !== false} onChange={(spread) => set({ spread })} />
+        <p className="text-[11.5px] leading-4 text-faint">Each free model has its own per-minute allowance. With this on, presentations are designed by several models at once and you rarely wait. Scanned PDFs are always read by Qwen 3.8, the free model that can see.</p>
+      </div>
       <Switch label="Keep the audio in the note after the write-up" checked={s.keepAudio} onChange={(keepAudio) => set({ keepAudio })} />
     </div>
   )

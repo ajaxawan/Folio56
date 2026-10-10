@@ -78,7 +78,13 @@ export function DeckMaker({ source, onClose, onCreated }: { source?: DeckSource;
         const p = await pdfSource(doc, name, method === 'pages' ? undefined : setBusy)
         title = p.title
         if (method === 'pages') slides = await pdfPageSlides(doc, (s) => setBusy(s))
-        else { if (p.text.replace(/\s/g, '').length < 200) throw new Error('This PDF has almost no text (it may be scanned images). Try “One slide per page”.'); text = p.text }
+        else if (p.text.replace(/\s/g, '').length >= 200) text = p.text
+        else {
+          // a scan: the pages are pictures, so Qwen 3.8 (the free model that can see) reads them
+          const { readScanned } = await import('../lib/deckAI')
+          text = await readScanned(doc, setBusy)
+          if (text.replace(/\s/g, '').length < 80) throw new Error('Couldn’t read any text in this PDF. Try “One slide per page”.')
+        }
       } else {
         const s = kind === 'note' ? await noteSource(noteId, withPages && kids > 0) : await markdownSource(file!)
         src = { kind: kind === 'note' ? 'note' : 'markdown', name: s.title, id: kind === 'note' ? noteId : undefined }
@@ -136,7 +142,7 @@ export function DeckMaker({ source, onClose, onCreated }: { source?: DeckSource;
                   <span className="text-[12.5px] text-accent-ink">{sourceName ? 'Change' : 'Browse'}</span>
                 </button>
               )}
-              {kind === 'pdf' && <p className="mt-1.5 text-[12px] text-faint">The PDF is read here and not kept — only the slides are saved.</p>}
+              {kind === 'pdf' && <p className="mt-1.5 text-[12px] text-faint">The PDF is read here and not kept — only the slides are saved.{ai ? ' A scanned PDF (pictures of pages) is read by Qwen 3.8 through Groq, up to 10 pages.' : ''}</p>}
             </div>
           </section>
 

@@ -22,14 +22,18 @@ export interface VoiceSettings {
   output: 'same' | 'en'
   keepAudio: boolean
   style: MemoStyle
+  /** V6.2: when your model is busy, let the other free models help (default on). */
+  spread?: boolean
 }
-export const VOICE_DEFAULTS: VoiceSettings = { key: '', stt: 'whisper-large-v3', llm: 'openai/gpt-oss-120b', language: '', output: 'same', keepAudio: true, style: 'minutes' }
+export const VOICE_DEFAULTS: VoiceSettings = { key: '', stt: 'whisper-large-v3', llm: 'openai/gpt-oss-120b', language: '', output: 'same', keepAudio: true, style: 'minutes', spread: true }
 // Stored in the meta table: never included in backups, exports or share links.
 // With AI switched off, Folio behaves as if no key were saved: recordings stay audio notes and
 // nothing is ever sent to Groq. (`raw` reads the stored key regardless, for the settings screen.)
 export async function getVoiceSettings(raw = false): Promise<VoiceSettings> {
   const row = await db.meta.get('voice')
   const s = { ...VOICE_DEFAULTS, ...((row?.value as Partial<VoiceSettings>) ?? {}) }
+  // models Groq has retired from the free plan → the best free one (Llama, Kimi, Qwen 3 / 3.6, Compound)
+  if (/^(llama|meta-llama\/llama-4|moonshotai\/|qwen\/qwen3-32b|qwen\/qwen3\.6|groq\/compound|mixtral|gemma)/i.test(s.llm)) s.llm = 'openai/gpt-oss-120b'
   return raw || aiOn() ? s : { ...s, key: '' }
 }
 export async function saveVoiceSettings(p: Partial<VoiceSettings>) {
@@ -113,74 +117,125 @@ async function transcribe(blob: Blob, s: VoiceSettings, onWait?: (n: number) => 
 }
 
 async function chat(messages: { role: string; content: string }[], s: VoiceSettings, maxTokens: number, onWait?: (n: number) => void): Promise<string> {
-  const body: Record<string, unknown> = { model: s.llm, messages, temperature: 0.3, max_completion_tokens: maxTokens }
-  if (s.llm.startsWith('openai/gpt-oss')) body.reasoning_effort = 'low'
-  const r = await groq('/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, s.key, onWait)
+  // V6.2: your chosen model first; if it's busy for long or retired, the next free model writes it
+  const pool = poolFor(s)
+  let r: any
+  for (let i = 0; i < pool.length; i++) {
+    const model = pool[i], last = i === pool.length - 1
+    const body: Record<string, unknown> = { model, messages, temperature: 0.3, max_completion_tokens: Math.min(maxTokens, infoOf(model)?.maxOut ?? maxTokens), ...reasoningParams(model, 'low') }
+    try { r = await groq('/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, s.key, onWait, last ? undefined : (w) => w > 15); break }
+    catch (e) { const g = e as GroqError & { wait?: number }; if (!last && ((g.status === 429 && g.wait !== undefined) || g.status === 404 || goneMsg.test(g.message))) continue; throw e }
+  }
   const out = r?.choices?.[0]?.message?.content ?? ''
   if (!out.trim()) throw new GroqError('The model returned an empty answer. Try again, or pick another model in Settings.')
   return out.trim().replace(/^```(?:markdown|md)?\n([\s\S]*?)\n```$/, '$1')
 }
 
-// ---------------------------------------------------------------- structured answers (V6.2)
-/** Groq models that can be held to a JSON schema ("strict" structured outputs). */
-export const STRICT_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b']
+// ---------------------------------------------------------------- the free models (V6.2)
+/**
+ * Every chat model on Groq's free plan worth using (checked October 2026). Each one has its OWN
+ * allowance — about 8,000 tokens a minute and 1,000 requests a day — so using all three, instead of
+ * waiting on one, roughly triples how much Folio56 can do in a minute.
+ */
+export interface FreeModel { id: string; label: string; note: string; strict: boolean; vision: boolean; maxOut: number; preview?: boolean }
+export const FREE_MODELS: FreeModel[] = [
+  { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', note: 'Best writing and reasoning', strict: true, vision: false, maxOut: 65536 },
+  { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B', note: 'Very fast, reads pictures and scanned pages', strict: true, vision: true, maxOut: 16384, preview: true },
+  { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B', note: 'Fastest, lighter writing', strict: true, vision: false, maxOut: 65536 },
+]
+export const STRICT_MODELS = FREE_MODELS.filter((m) => m.strict).map((m) => m.id)
 export const BEST_FREE = 'openai/gpt-oss-120b'
-const SPARE = 'openai/gpt-oss-20b'
+export const VISION_MODEL = 'qwen/qwen3.8-27b'
+const infoOf = (id: string) => FREE_MODELS.find((m) => m.id === id)
+/** The model to start with, then the others in order of quality. With "spread" off, just the one. */
+export function poolFor(s: VoiceSettings, needStrict = false): string[] {
+  const first = !needStrict || STRICT_MODELS.includes(s.llm) ? s.llm || BEST_FREE : BEST_FREE
+  if (s.spread === false) return [first]
+  return [first, ...FREE_MODELS.map((m) => m.id).filter((id) => id !== first)]
+}
+type Effort = 'none' | 'low' | 'medium' | 'high'
+/** Each family takes its own reasoning settings; the thinking itself is never sent back. */
+function reasoningParams(model: string, effort: Effort): Record<string, unknown> {
+  if (model.startsWith('openai/gpt-oss')) return { reasoning_effort: effort === 'none' ? 'low' : effort, include_reasoning: false }
+  if (model.startsWith('qwen/')) return { reasoning_effort: effort, reasoning_format: 'hidden' }
+  return {}
+}
 /** Groq's free plan counts about 8,000 tokens a minute per model; one request must fit inside that. */
 export const TPM = 8000
 export const estTokens = (s: string) => Math.ceil(s.length / 3.5)
+const goneMsg = /decommission|does not exist|not found|model_not_found|not available/i
 
 export interface JsonOpts {
   name: string; schema: object; maxTokens: number; effort?: 'low' | 'medium' | 'high'
   onWait?: (s: number) => void
   /** Called when the answer comes from another model than asked for (so the UI can say so). */
   onModel?: (model: string) => void
+  /** Start with this model instead of your chosen one (used to spread batches across models). */
+  model?: string
 }
 /**
- * Ask for a JSON answer that must match `schema`. Uses GPT-OSS 120B (or your chosen strict model);
- * if Groq's per-minute limit would make you wait more than ~15 s, the smaller GPT-OSS 20B — which has
- * its own allowance — answers instead. Falls back to plain JSON mode if strict mode is refused.
+ * Ask for a JSON answer that must match `schema` (strict structured outputs). Starts with your chosen
+ * model (GPT-OSS 120B by default). If Groq's per-minute limit would mean waiting more than ~15 s, or a
+ * model has been retired, the next free model answers instead. Falls back to plain JSON mode if
+ * strict mode is refused.
  */
 export async function askJSON<T>(system: string, user: string, o: JsonOpts): Promise<{ data: T; model: string }> {
   const s = await getVoiceSettings()
   if (!s.key) throw new GroqError(aiOn() ? 'Add your free Groq key in Settings → AI to use this.' : 'AI features are off. You can turn them on in Settings → AI.')
-  const primary = STRICT_MODELS.includes(s.llm) ? s.llm : BEST_FREE
+  let pool = poolFor(s, true)
+  if (o.model && pool.includes(o.model)) pool = [o.model, ...pool.filter((m) => m !== o.model)]
   const schemaText = JSON.stringify(o.schema)
   const room = TPM - 300 - estTokens(system) - estTokens(user) - estTokens(schemaText)
   if (room < 900) throw new GroqError('That’s too much text for one request on Groq’s free plan. Try a shorter source or a shorter length.')
-  const maxTokens = Math.min(o.maxTokens, room)
-  const call = async (model: string, mode: 'strict' | 'object', effort = o.effort ?? 'medium', canSpill = true): Promise<{ data: T; model: string }> => {
+  const call = async (i: number, mode: 'strict' | 'object', effort: Effort = o.effort ?? 'medium'): Promise<{ data: T; model: string }> => {
+    const model = pool[i]
+    const last = i >= pool.length - 1
     const body: Record<string, unknown> = {
-      model, temperature: 0.4, max_completion_tokens: maxTokens,
+      model, temperature: 0.4, max_completion_tokens: Math.min(o.maxTokens, room, infoOf(model)?.maxOut ?? room),
       messages: [{ role: 'system', content: mode === 'object' ? `${system}\n\nReply with ONE JSON object matching this JSON schema, and nothing else:\n${schemaText}` : system }, { role: 'user', content: user }],
       response_format: mode === 'strict' ? { type: 'json_schema', json_schema: { name: o.name, strict: true, schema: o.schema } } : { type: 'json_object' },
+      ...reasoningParams(model, effort),
     }
-    if (model.startsWith('openai/gpt-oss')) { body.reasoning_effort = effort; body.include_reasoning = false }
     let r: any
     try {
       r = await groq('/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, s.key, o.onWait,
-        canSpill && model !== SPARE ? (wait) => wait > 15 : undefined)
+        last ? undefined : (wait) => wait > 15)
     } catch (e) {
       const g = e as GroqError & { wait?: number }
-      if (g.status === 429 && g.wait !== undefined && model !== SPARE) { o.onModel?.(SPARE); return call(SPARE, mode, effort, false) }
-      if (g.status === 404 || /decommission|does not exist|not found/i.test(g.message)) { if (model !== SPARE) { o.onModel?.(SPARE); return call(SPARE, mode, effort, false) } }
+      // busy for a while, or retired: the next free model takes over
+      if (!last && ((g.status === 429 && g.wait !== undefined) || g.status === 404 || goneMsg.test(g.message))) { o.onModel?.(pool[i + 1]); return call(i + 1, mode, effort) }
       if (g.status === 400 && mode === 'strict') {
         // the model drifted from the schema, or strict mode isn't available: try once more, then plain JSON mode
-        if (/json_validate_failed|Failed to generate JSON|schema/i.test(g.message) && effort !== 'low') return call(model, 'strict', 'low', canSpill)
-        return call(model, 'object', effort, canSpill)
+        if (/json_validate_failed|Failed to generate JSON|schema/i.test(g.message) && effort !== 'low') return call(i, 'strict', 'low')
+        return call(i, 'object', effort)
       }
       throw e
     }
     const ch = r?.choices?.[0]
     const txt = String(ch?.message?.content ?? '').trim()
-    if (ch?.finish_reason === 'length' && effort !== 'low') return call(model, mode, 'low', canSpill) // ran out of room thinking: think less
+    if (ch?.finish_reason === 'length' && effort !== 'low') return call(i, mode, 'low') // ran out of room thinking: think less
     try { return { data: JSON.parse(txt) as T, model } } catch { /* repaired below */ }
     const a = txt.indexOf('{'), b = txt.lastIndexOf('}')
     try { if (a >= 0 && b > a) return { data: JSON.parse(txt.slice(a, b + 1)) as T, model } } catch { /* fall through */ }
-    if (mode === 'strict') return call(model, 'object', 'low', canSpill)
+    if (mode === 'strict') return call(i, 'object', 'low')
     throw new GroqError(ch?.finish_reason === 'length' ? 'The answer was cut short. Try a shorter length.' : 'The AI’s answer wasn’t valid. Try again.')
   }
-  return call(primary, 'strict')
+  return call(0, 'strict')
+}
+
+/**
+ * Read pictures (e.g. scanned PDF pages) with Qwen 3.8, the free model that can see. At most 3 images
+ * a request; each counts as about 2,000 tokens of the free per-minute allowance.
+ */
+export async function askVision(prompt: string, images: string[], maxTokens = 1800, onWait?: (s: number) => void): Promise<string> {
+  const s = await getVoiceSettings()
+  if (!s.key) throw new GroqError(aiOn() ? 'Add your free Groq key in Settings → AI to use this.' : 'AI features are off. You can turn them on in Settings → AI.')
+  const body = {
+    model: VISION_MODEL, temperature: 0.1, max_completion_tokens: maxTokens, ...reasoningParams(VISION_MODEL, 'none'),
+    messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, ...images.slice(0, 3).map((url) => ({ type: 'image_url', image_url: { url } }))] }],
+  }
+  const r = await groq('/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, s.key, onWait)
+  return String(r?.choices?.[0]?.message?.content ?? '').trim()
 }
 
 // ---------------------------------------------------------------- prompts

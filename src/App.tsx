@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
-  Archive, ArchiveRestore, ArrowDownUp, BookOpen, BookOpenText, CalendarCheck, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon,
+  Archive, ArchiveRestore, ArrowDownUp, Compass, BookOpen, BookOpenText, CalendarCheck, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon,
   Layers, Link2, Mic, PanelLeftOpen, Presentation, Palette, Pin, RotateCcw, Search, Send, Settings as SettingsIcon, SquarePen, Sun, Tag, Trash2, X,
 } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -36,7 +36,7 @@ import { WelcomeCard } from './components/WelcomeCard'
 import { Toaster } from './components/Toaster'
 import { toast } from './lib/toast'
 import { APP_PATH } from './lib/paths'
-import { LIGHT_THEMES, THEMES, usePrefs } from './lib/prefs'
+import { LIGHT_THEMES, THEMES, useAI, usePrefs } from './lib/prefs'
 import type { Label, Note, View } from './types'
 
 const ImportDialog = lazy(() => import('./components/ImportDialog'))
@@ -44,6 +44,7 @@ const ImportDialog = lazy(() => import('./components/ImportDialog'))
 const CommandPalette = lazy(() => import('./components/CommandPalette').then((m) => ({ default: m.CommandPalette })))
 const SettingsDialog = lazy(() => import('./components/SettingsDialog').then((m) => ({ default: m.SettingsDialog })))
 const TemplateGallery = lazy(() => import('./components/TemplateGallery').then((m) => ({ default: m.TemplateGallery })))
+const RavDialog = lazy(() => import('./components/RavBits').then((m) => ({ default: m.RavDialog })))
 const DeckMaker = lazy(() => import('./components/DeckMaker').then((m) => ({ default: m.DeckMaker })))
 const ExportDialog = lazy(() => import('./components/ExportDialog').then((m) => ({ default: m.ExportDialog })))
 const ParcelHost = lazy(() => import('./components/ParcelDialogs').then((m) => ({ default: m.ParcelHost })))
@@ -93,6 +94,8 @@ export default function App() {
   const [settings, setSettings] = useState(false)
   const [templates, setTemplates] = useState(false)
   const [deckMaker, setDeckMaker] = useState(false)
+  const [rav, setRav] = useState(false)
+  const aiReady = useAI()
   const [exporting, setExporting] = useState<null | import('./lib/exporter').Scope>(null)
   const [sidebar, setSidebar] = useState(true)
   const [drawer, setDrawer] = useState(false)
@@ -393,6 +396,7 @@ export default function App() {
     { id: 'import-md', label: 'Import Markdown…', icon: <FileUp size={16} />, keywords: 'md markdown claude obsidian cherry import', run: () => setImporting([]) },
     { id: 'export-all', label: 'Export notes…', icon: <FileDown size={16} />, keywords: 'export word docx pdf print markdown md html web text zip download', run: () => setExporting({ all: true }) },
     { id: 'deck', label: 'Make a presentation…', icon: <Presentation size={16} />, keywords: 'slides deck powerpoint pptx present pitch ai pdf markdown', run: () => setDeckMaker(true) },
+    ...(aiReady ? [{ id: 'rav', label: 'Reason · Attack · Validate…', icon: <Compass size={16} />, keywords: 'rav reason attack validate critique test idea plan decision red team assumptions', run: () => setRav(true) }] : []),
     { id: 'templates', label: 'Manage templates', icon: <LayoutTemplate size={16} />, keywords: 'template gallery edit default', run: () => setTemplates(true) },
     { id: 'export', label: 'Export backup (JSON)', icon: <Download size={16} />, keywords: 'backup json', run: exportAll },
     { id: 'send-all', label: 'Share all notes as a link…', icon: <Send size={16} />, keywords: 'share send link transfer device', run: () => sendNotes('all') },
@@ -642,6 +646,7 @@ export default function App() {
         {templates && <TemplateGallery labelIds={labelCtx} onClose={() => setTemplates(false)} onCreated={(id) => { setTemplates(false); openNote(id) }} onEdit={(id) => { setTemplates(false); openNote(id) }} />}
         {exporting && <ExportDialog scope={exporting} onClose={() => setExporting(null)} />}
         {deckMaker && <DeckMaker onClose={() => setDeckMaker(false)} onCreated={(id) => { setDeckMaker(false); openNote(id) }} />}
+        {rav && <RavDialog noteId={openId ?? undefined} onClose={() => setRav(false)} onDone={(id) => { setRav(false); openNote(id) }} />}
         {settings && <SettingsDialog noteCount={liveCount} onClose={() => setSettings(false)} onImport={() => setImporting([])} onExport={() => { setSettings(false); setExporting({ all: true }) }} onTemplates={() => { setSettings(false); setTemplates(true) }} onWelcome={async () => { const { addWelcomeNote } = await import('./lib/welcome'); openNote(await addWelcomeNote()) }} />}
         {parcelReq && <ParcelHost onOpenNote={openNote} />}
         {stackHint && <SeriesSheet ids={stackHint.ids} suggestion={stackHint.name} onClose={() => setStackHint(null)} />}

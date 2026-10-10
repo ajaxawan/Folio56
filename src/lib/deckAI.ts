@@ -104,7 +104,7 @@ ${LAYOUT_GUIDE}
 - Write in the main language of the source. Today is ${today}.${o.extra.trim() ? `\nThe author also asks: ${o.extra.trim()}` : ''}`
   progress('Planning the storyline…')
   const { data, model } = await askJSON<{ title: string; subtitle: string; slides: { layout: Layout; title: string; points: string[] }[] }>(system, `SOURCE:\n${material}`,
-    { name: 'outline', schema: OUTLINE_SCHEMA, maxTokens: 4200, effort: 'medium', onWait, onModel: () => progress('Busy — using GPT-OSS 20B for this step…') })
+    { name: 'outline', schema: OUTLINE_SCHEMA, maxTokens: 4200, effort: 'medium', onWait, onModel: (m) => progress(`Busy — ${m.includes('qwen') ? 'Qwen 3.8' : 'GPT-OSS 20B'} is taking this step…`) })
   const items: OutlineItem[] = (data.slides ?? []).filter((x) => x && (x.title || x.points?.length || (x.layout && x.layout !== 'bullets'))).map((x) => ({ id: nanoid(8), layout: AI_LAYOUTS.includes(x.layout) ? x.layout : 'bullets', title: String(x.title ?? '').trim(), points: (x.points ?? []).map((p) => String(p).trim()).filter(Boolean).slice(0, 8) }))
   if (!items.length) throw new Error('The AI didn’t plan any slides. Try again, or use “From headings”.')
   if (items[0].layout !== 'title') items.unshift({ id: nanoid(8), layout: 'title', title: String(data.title ?? '').trim() || 'Presentation', points: [] })
@@ -134,33 +134,42 @@ ${notes ? '- notes: 2–4 sentences the presenter can say aloud, in plain spoken
 Never invent facts or numbers. Use the plan's points and the source only.`
 
 export async function designSlides(outline: Outline, o: AiOpts, progress: Progress): Promise<Slide[]> {
-  const { askJSON, estTokens } = await import('./voice')
+  const { askJSON, estTokens, getVoiceSettings, poolFor, FREE_MODELS } = await import('./voice')
   const onWait = (n: number) => progress(`Waiting ${n}s for Groq’s free per-minute limit…`)
   const withSource = estTokens(outline.material) < 1700
   const items = outline.items
   // batches small enough that question + answer fit one request on the free plan
   const per = withSource ? 5 : 6
-  const out: Slide[] = []
-  let model = ''
-  for (let i = 0; i < items.length; i += per) {
-    const batch = items.slice(i, i + per)
-    progress(items.length > per ? `Designing slides ${i + 1}–${Math.min(i + per, items.length)} of ${items.length}…` : 'Designing the slides…')
-    const plan = batch.map((x, k) => `${i + k + 1}. [${x.layout}] ${x.title}${x.points.length ? '\n' + x.points.map((p) => `   - ${p}`).join('\n') : ''}`).join('\n')
-    const user = `DECK: ${outline.title}${outline.subtitle ? ` — ${outline.subtitle}` : ''}\nPLAN FOR THESE ${batch.length} SLIDES (write exactly ${batch.length}, in this order):\n${plan}${withSource ? `\n\nSOURCE:\n${outline.material}` : ''}`
-    const { data, model: m } = await askJSON<{ slides: RawSlide[] }>(`You are a presentation designer writing slide content.\n${SLIDE_RULES(o.notes)}`, user,
-      { name: 'slides', schema: SLIDES_SCHEMA, maxTokens: 3600, effort: 'low', onWait, onModel: () => progress('Busy — GPT-OSS 20B is helping with these slides…') })
-    model = m
+  const batches: { start: number; items: OutlineItem[] }[] = []
+  for (let i = 0; i < items.length; i += per) batches.push({ start: i, items: items.slice(i, i + per) })
+  // V6.2: each free model has its own per-minute allowance, so batches are designed side by side,
+  // one per model (GPT-OSS 120B, Qwen 3.8, GPT-OSS 20B) — about three times faster than one by one
+  const pool = poolFor(await getVoiceSettings(), true).slice(0, batches.length)
+  const name = (id: string) => FREE_MODELS.find((m) => m.id === id)?.label ?? id
+  progress(batches.length === 1 ? 'Designing the slides…' : pool.length > 1 ? `Designing ${items.length} slides with ${pool.length} free models at once…` : `Designing ${items.length} slides…`)
+  let done = 0
+  const design = async (b: { start: number; items: OutlineItem[] }, model: string) => {
+    const plan = b.items.map((x, k) => `${b.start + k + 1}. [${x.layout}] ${x.title}${x.points.length ? '\n' + x.points.map((p) => `   - ${p}`).join('\n') : ''}`).join('\n')
+    const user = `DECK: ${outline.title}${outline.subtitle ? ` — ${outline.subtitle}` : ''}\nPLAN FOR THESE ${b.items.length} SLIDES (write exactly ${b.items.length}, in this order):\n${plan}${withSource ? `\n\nSOURCE:\n${outline.material}` : ''}`
+    const { data } = await askJSON<{ slides: RawSlide[] }>(`You are a presentation designer writing slide content.\n${SLIDE_RULES(o.notes)}`, user,
+      { name: 'slides', schema: SLIDES_SCHEMA, maxTokens: 3600, effort: 'low', onWait, model, onModel: (m) => progress(`Busy — ${name(m)} is helping with these slides…`) })
+    done += b.items.length
+    if (batches.length > 1) progress(`Designed ${done} of ${items.length} slides…`)
     const got = (data.slides ?? []).map(normalise).filter((x): x is Slide => !!x)
     // keep the plan's order and titles if the model dropped or merged one
-    batch.forEach((plan, k) => {
-      const s = got[k] ?? { id: nanoid(8), layout: 'bullets' as Layout, title: plan.title, bullets: plan.points.slice(0, 5) }
-      if (!s.title) s.title = plan.title
-      out.push(s)
+    return b.items.map((planned, k) => {
+      const s = got[k] ?? { id: nanoid(8), layout: 'bullets' as Layout, title: planned.title, bullets: planned.points.slice(0, 5) }
+      if (!s.title) s.title = planned.title
+      return s
     })
   }
+  // run up to one batch per model at a time, keeping the order of the slides
+  const results: Slide[][] = new Array(batches.length)
+  let next = 0
+  await Promise.all(pool.map(async (model) => { while (next < batches.length) { const k = next++; results[k] = await design(batches[k], model) } }))
+  const out = results.flat()
   if (out[0]?.layout !== 'title') out.unshift({ id: nanoid(8), layout: 'title', title: outline.title, subtitle: outline.subtitle || undefined })
   else if (!out[0].subtitle && outline.subtitle) out[0].subtitle = outline.subtitle
-  void model
   return checkNumbers(out, figuresOf(outline.source))
 }
 
@@ -265,3 +274,32 @@ ${SLIDE_RULES(!!s.notes)}`, `SLIDE:\n${JSON.stringify(rest)}`, { name: 'slides',
   return figures ? checkNumbers([fixed], figures)[0] : fixed
 }
 export const MAKE_VISUAL = 'Show the same content as the most fitting visual layout — process, flow, cycle, timeline, chart, matrix, stat or two — instead of a list. Pick "chart" only if there are 3+ numbers of the same kind.'
+
+// ---------------------------------------------------------------- scanned PDFs (pictures of pages)
+async function pageImage(doc: import('pdfjs-dist').PDFDocumentProxy, n: number) {
+  const page = await doc.getPage(n)
+  const v0 = page.getViewport({ scale: 1 })
+  const v = page.getViewport({ scale: Math.min(1400 / v0.width, 1800 / v0.height) })
+  const c = document.createElement('canvas'); c.width = Math.round(v.width); c.height = Math.round(v.height)
+  const ctx = c.getContext('2d')!; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height)
+  await page.render({ canvasContext: ctx, viewport: v, canvas: c } as never).promise
+  return c.toDataURL('image/jpeg', 0.82)
+}
+/**
+ * A PDF that is only pictures (a scan) has no text to read. Qwen 3.8 — the free model that can see —
+ * reads the pages instead, two at a time (about 2,000 tokens each of the free per-minute allowance).
+ */
+export async function readScanned(doc: import('pdfjs-dist').PDFDocumentProxy, progress: Progress, maxPages = 10): Promise<string> {
+  const { askVision } = await import('./voice')
+  const onWait = (n: number) => progress(`Waiting ${n}s for Groq’s free per-minute limit…`)
+  const n = Math.min(doc.numPages, maxPages)
+  const out: string[] = []
+  for (let i = 1; i <= n; i += 2) {
+    const last = Math.min(i + 1, n)
+    progress(`Reading scanned page${last > i ? `s ${i}–${last}` : ` ${i}`} of ${n} with Qwen 3.8…`)
+    const imgs: string[] = []
+    for (let k = i; k <= last; k++) imgs.push(await pageImage(doc, k))
+    out.push(await askVision('Transcribe all the text on these document pages, in reading order, as Markdown. Use ## for headings and keep tables as Markdown tables. Copy every number, date and name exactly. Describe a chart only by its title and the values printed on it. No commentary.', imgs, 1800, onWait))
+  }
+  return out.join('\n\n')
+}

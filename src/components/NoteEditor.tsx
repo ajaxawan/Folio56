@@ -4,7 +4,7 @@ import { filterSuggestionItems } from '@blocknote/core/extensions'
 import '@blocknote/mantine/style.css'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
-  Archive, ArchiveRestore, ArrowLeft, Check, Link2, ListTree, Printer, ChevronRight, Copy, Download, FilePlus2, FileText, History, LayoutTemplate,
+  Archive, ArchiveRestore, ArrowLeft, Check, Compass, Link2, ListTree, Printer, ChevronRight, Copy, Download, FilePlus2, FileText, History, LayoutTemplate,
   Image as ImageIcon, Layers, Presentation, Lock, LockOpen, Maximize2, MessageCircle, Mic, Smile, Sparkles, Grid3x3, Minimize2, MoreHorizontal, Palette, Pin, Plus, Send, Sun, Tag, Trash2, Type,
 } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -30,6 +30,8 @@ import { sendNotes } from '../lib/parcelBus'
 import { useKeyboardOpen, usePhone } from '../lib/mobile'
 import { KeyboardBar } from './KeyboardBar'
 import { MemoBanner } from './MemoBanner'
+import { RavBanner, RavOffer } from './RavBits'
+const RavDialog = lazy(() => import('./RavBits').then((m) => ({ default: m.RavDialog })))
 import { FormaliseSheet } from './FormaliseSheet'
 import { CopySheet } from './CopySheet'
 import { DictateBar } from './DictateBar'
@@ -155,6 +157,7 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
   const [tplInsert, setTplInsert] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [deckOpen, setDeckOpen] = useState(false)
+  const [ravOpen, setRavOpen] = useState(false)
   const insertAt = useRef<string | null>(null)
   const draft = note.templateDraft ?? null
   const busy = !!note.memo && (note.memo.status === 'transcribing' || note.memo.status === 'writing') && isProcessing(note.id)
@@ -507,6 +510,7 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
               {!note.locked && !draft && <MenuItem icon={<Send size={15} />} onClick={async () => { setMenu(null); await persist(); sendNotes([note.id]) }}>Share as link…</MenuItem>}
               {!note.locked && <MenuItem icon={<Download size={15} />} onClick={async () => { setMenu(null); await persist({ title: title.trim() }); setExporting(true) }}>Export…</MenuItem>}
               {!note.locked && !draft && <MenuItem icon={<Presentation size={15} />} onClick={async () => { setMenu(null); await persist({ title: title.trim() }); setDeckOpen(true) }}>Make a presentation…</MenuItem>}
+              {ai && !note.locked && !draft && !note.rav && <MenuItem icon={<Compass size={15} />} onClick={async () => { setMenu(null); await persist({ title: title.trim() }); setRavOpen(true) }}>Reason · Attack · Validate…</MenuItem>}
               <MenuItem icon={<Printer size={15} />} onClick={async () => { setMenu(null); await persist({ title: title.trim() }); document.title = title || 'Note'; window.print(); document.title = 'Folio56' }}>Print or save as PDF</MenuItem>
               {outline.length >= 3 && <MenuItem icon={<ListTree size={15} />} onClick={() => setMenu('toc')}>Contents</MenuItem>}
               {!draft && <MenuItem icon={note.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />} onClick={async () => { setMenu(null); await patchNote(note.id, { archived: !note.archived, pinned: false }); close() }}>{note.archived ? 'Unarchive' : 'Archive'}</MenuItem>}
@@ -597,7 +601,7 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
               </div>
             </div>
 
-            <div className="mt-5"><MemoBanner note={note} /></div>
+            <div className="mt-5"><MemoBanner note={note} />{note.rav && <RavBanner note={note} onOpen={go} />}{ai && <RavOffer note={note} onRun={async () => { await persist({ title: title.trim() }); setRavOpen(true) }} />}</div>
             <div className={`min-h-[40vh] ${busy ? 'pointer-events-none opacity-60' : ''}`} onFocus={() => setEdFocus(true)} onBlur={() => setEdFocus(false)}>
               <BlockNoteView editor={editor} theme={theme} onChange={onChange} editable={!busy} slashMenu={false}>
                 <SuggestionMenuController triggerCharacter="[[" getItems={linkItems} />
@@ -690,6 +694,7 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
           onInsert={(blocks) => { setTplInsert(false); insertTemplate(blocks) }} />}
         {exporting && <ExportDialog scope={{ ids: [note.id] }} onClose={() => setExporting(false)} />}
         {deckOpen && <DeckMaker source={{ kind: 'note', id: note.id }} onClose={() => setDeckOpen(false)} onCreated={(id) => { setDeckOpen(false); go(id) }} />}
+        {ravOpen && <RavDialog noteId={note.id} onClose={() => setRavOpen(false)} onDone={(id) => { setRavOpen(false); go(id) }} />}
       </Suspense>
       {formalise && (
         <FormaliseSheet fromRecording={!!note.memo?.transcript && note.memo.source !== 'text'} onClose={() => setFormalise(false)}

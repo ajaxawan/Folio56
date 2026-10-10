@@ -42,6 +42,8 @@ export interface Note {
   templateDraft?: string | null
   /** V6.1: this note is a presentation (slides + theme); its content mirrors the slides as an outline. */
   deck?: import('./lib/deck').Deck | null
+  /** V6.2: this page is a Reason · Attack · Validate review of another note. */
+  rav?: import('./lib/rav').RavMeta | null
 }
 
 export type MemoStyle = 'minutes' | 'memo' | 'transcript' | 'journal'
@@ -64,6 +66,8 @@ export interface Memo {
   source?: 'audio' | 'text'
   /** Open action items from the previous meeting in the series, and what this meeting said about them. */
   followUp?: { fromNoteId: string; fromTitle: string; items: { index: number; text: string; status: 'done' | 'open' | 'unknown' }[]; applied?: boolean }
+  /** V6.2: the "test the ideas in this" offer was dismissed. */
+  ravDismissed?: boolean
 }
 
 export interface Label { id: string; name: string; color?: ColorKey }

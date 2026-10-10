@@ -139,6 +139,7 @@ const openMaker = async (p) => { await p.keyboard.press('Control+k'); await p.wa
     await dm.getByRole('button', { name: 'Design 11 slides' }).click(); await p.getByLabel('Presentation title').waitFor({ timeout: 20000 }); await p.waitForTimeout(800)
     const sl = calls.filter((c) => c.response_format?.json_schema?.name === 'slides')
     ok('slides are designed in batches that fit the free plan', sl.length === 3 && sl.every((c) => c.reasoning_effort === 'low'))
+    ok('…side by side on the three free models (each has its own allowance)', new Set(sl.map((c) => c.model)).size === 3, sl.map((c) => c.model).join(','))
     ok('your edits to the storyline are used', sl.some((c) => /The roof is right for solar/.test(c.messages[1].content)))
     const deck = (await dbNotes(p)).find((x) => x.deck?.made === 'ai')?.deck
     ok('11 slides with every visual layout', deck && deck.slides.map((s) => s.layout).join(',') === 'title,agenda,process,flow,cycle,timeline,chart,chart,matrix,bullets,closing', deck?.slides.map((s) => s.layout).join(','))
@@ -225,9 +226,9 @@ const openMaker = async (p) => { await p.keyboard.press('Control+k'); await p.wa
     ok('with review off the button says Create', await dm.getByRole('button', { name: 'Create presentation' }).isVisible())
     await dm.getByRole('button', { name: 'Create presentation' }).click(); await p.waitForTimeout(4500)
     const o = calls.filter((c) => c.response_format?.json_schema?.name === 'outline')
-    ok('a 40-second wait on 120B → GPT-OSS 20B answers instead (its own allowance)', o.length === 2 && o[0].model === 'openai/gpt-oss-120b' && o[1].model === 'openai/gpt-oss-20b')
+    ok('a 40-second wait on 120B → the next free model (Qwen 3.8) answers instead, with its own allowance', o.length === 2 && o[0].model === 'openai/gpt-oss-120b' && o[1].model === 'qwen/qwen3.8-27b' && o[1].reasoning_format === 'hidden')
     const sl = calls.filter((c) => /writing slide content/.test(c.messages[0].content))
-    ok('a schema miss is retried in plain JSON mode (and the deck still made)', sl.length === 4 && sl[1].response_format.type === 'json_object' && (await dbNotes(p)).some((x) => x.deck?.made === 'ai' && x.deck.slides.length === 11))
+    ok('a schema miss is retried in plain JSON mode (and the deck still made)', sl.length === 4 && sl.filter((c) => c.response_format.type === 'json_object').length === 1 && (await dbNotes(p)).some((x) => x.deck?.made === 'ai' && x.deck.slides.length === 11))
     await ctx.close()
   }
 
