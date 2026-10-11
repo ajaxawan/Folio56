@@ -1,4 +1,5 @@
-import { Check, ClipboardPaste, Copy, Image as ImageIcon, KeyRound, Link2, Lock, RefreshCw, Send, Share2 } from 'lucide-react'
+import { Camera, Check, ClipboardPaste, Copy, Image as ImageIcon, KeyRound, Link2, Lock, QrCode, RefreshCw, Send, Share2 } from 'lucide-react'
+import { BeamScanner, BeamSend } from './Beam'
 import { useEffect, useMemo, useState } from 'react'
 import { db } from '../lib/db'
 import { friendlyDate, senderName } from '../lib/device'
@@ -7,8 +8,10 @@ import {
   type Incoming, type ParcelContent,
 } from '../lib/parcel'
 import { closeParcel, useParcelRequest } from '../lib/parcelBus'
-import { Modal, Switch } from './ui'
+import { Modal, Segmented, Switch } from './ui'
 
+/** Pictures ride along in a beam while it stays under about 100 codes. */
+const BEAM_IMAGES_MAX = 24_000
 const primary = 'flex flex-1 items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-[14px] font-medium text-on-accent hover:opacity-90 disabled:opacity-50'
 const secondary = 'flex flex-1 items-center justify-center gap-2 rounded-lg bg-wash px-3 py-2.5 text-[14px] hover:bg-wash-2 disabled:opacity-50'
 
@@ -18,7 +21,7 @@ export function ParcelHost({ onOpenNote }: { onOpenNote: (id: string) => void })
   if (!req) return null
   return req.kind === 'send'
     ? <SendDialog ids={req.ids} />
-    : <ReceiveDialog key={req.link ?? 'paste'} link={req.link} onOpenNote={onOpenNote} />
+    : <ReceiveDialog key={req.link ?? (req.scan ? 'scan' : 'paste')} link={req.link} scan={req.scan} onOpenNote={onOpenNote} />
 }
 
 // ---------------------------------------------------------------- Send
@@ -35,6 +38,9 @@ function SendDialog({ ids }: { ids: string[] | 'all' }) {
   const [images, setImages] = useState<boolean | null>(null) // null = decide automatically
   const [link, setLink] = useState<Built | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  // V6.3: the same notes as a link, or beamed as QR codes
+  const [mode, setMode] = useState<'link' | 'beam'>('link')
+  const [beam, setBeam] = useState<{ bytes: Uint8Array; link: string; images: number; withImages: boolean } | null>(null)
 
   useEffect(() => {
     (async () => {
@@ -68,6 +74,22 @@ function SendDialog({ ids }: { ids: string[] | 'all' }) {
     return () => { live = false }
   }, [content, activeCode, codeInLink, images])
 
+  useEffect(() => {
+    if (mode !== 'beam' || !content) return
+    let live = true
+    ;(async () => {
+      // Beam goes screen to camera, so there's no code; pictures stay while the loop stays short.
+      const slim = stripImages(content.notes)
+      let bytes = await pack({ ...content, notes: slim.notes }, null), withImages = false
+      if (slim.removed && images !== false) {
+        const full = await pack({ ...content, notes: await shrinkImages(content.notes) }, null)
+        if (images === true || full.length <= BEAM_IMAGES_MAX) { bytes = full; withImages = true }
+      }
+      if (live) setBeam({ bytes, link: toLink(bytes, null, false), images: slim.removed, withImages })
+    })()
+    return () => { live = false }
+  }, [mode, content, images])
+
   const count = info?.notes.length ?? 0
   const chosen = ids === 'all' ? null : ids.length
   const subpages = chosen !== null ? Math.max(0, count - chosen + (info?.skippedLocked ?? 0)) : 0
@@ -79,7 +101,7 @@ function SendDialog({ ids }: { ids: string[] | 'all' }) {
   }
 
   return (
-    <Modal title={<span className="flex items-center gap-2"><Send size={17} /> Share as a link</span>} onClose={closeParcel}>
+    <Modal title={<span className="flex items-center gap-2"><Send size={17} /> {mode === 'beam' ? 'Share with Beam' : 'Share as a link'}</span>} onClose={closeParcel}>
       {!info ? <p className="text-[14px] text-muted">Packing…</p> : count === 0 ? (
         <p className="text-[14px] text-muted">{info.skippedLocked ? 'Locked notes can’t be shared. Remove the lock first.' : 'Nothing to share.'}</p>
       ) : (
@@ -89,6 +111,17 @@ function SendDialog({ ids }: { ids: string[] | 'all' }) {
             {subpages > 0 && ` · ${subpages} sub-page${subpages === 1 ? '' : 's'} included`}
             {info.skippedLocked > 0 && ` · ${info.skippedLocked} locked skipped`}
           </p>
+          <Segmented value={mode} onChange={setMode} options={[{ value: 'link', label: <span className="flex items-center justify-center gap-1.5"><Link2 size={14} /> Link</span> }, { value: 'beam', label: <span className="flex items-center justify-center gap-1.5"><QrCode size={14} /> Beam (QR)</span> }]} />
+
+          {mode === 'beam' ? (
+            <>
+              {beam && beam.images > 0 && (
+                <Switch label={<span className="flex items-center gap-2 text-[13.5px]"><ImageIcon size={14} className="text-muted" /> Include {beam.images} image{beam.images === 1 ? '' : 's'} <span className="text-faint">(more codes)</span></span>}
+                  checked={beam.withImages} onChange={(v) => setImages(v)} />
+              )}
+              <BeamSend bytes={beam?.bytes ?? null} link={beam?.link ?? null} />
+            </>
+          ) : (<>
 
           <div className="rounded-xl border border-line p-3">
             <Switch label={<span className="flex items-center gap-2 text-[14px]"><Lock size={15} /> Protect with a code</span>} checked={protect} onChange={setProtect} />
@@ -127,6 +160,7 @@ function SendDialog({ ids }: { ids: string[] | 'all' }) {
               </div>
             </div>
           ) : <p className="text-[13px] text-muted">Packing…</p>}
+          </>)}
         </div>
       )}
     </Modal>
@@ -142,7 +176,7 @@ const STATUS: Record<Incoming['status'], { label: string; tone: string }> = {
   older: { label: 'Older copy', tone: 'bg-wash text-faint' },
 }
 
-function ReceiveDialog({ link, onOpenNote }: { link?: string; onOpenNote: (id: string) => void }) {
+function ReceiveDialog({ link, scan: startScan, onOpenNote }: { link?: string; scan?: boolean; onOpenNote: (id: string) => void }) {
   const initial = link ? fromHash(link) : null
   const initialBytes = initial?.bytes, initialCode = initial?.code ?? null
   const [bytes, setBytes] = useState<Uint8Array | null>(initialBytes ?? null)
@@ -155,6 +189,7 @@ function ReceiveDialog({ link, onOpenNote }: { link?: string; onOpenNote: (id: s
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState<{ added: number; updated: number; first?: string } | null>(null)
+  const [scanning, setScanning] = useState(!!startScan)
 
   const load = async (b: Uint8Array, c: string | null) => {
     setErr(''); setBusy(true)
@@ -202,7 +237,7 @@ function ReceiveDialog({ link, onOpenNote }: { link?: string; onOpenNote: (id: s
   const depth = (n: Incoming['note']) => { let d = 0, p = n.parentId; while (p && byId.has(p) && d < 4) { d++; p = byId.get(p)!.note.parentId } return d }
 
   return (
-    <Modal title={<span className="flex items-center gap-2"><Link2 size={18} /> {done ? 'Added to Folio' : 'Open a shared link'}</span>} onClose={closeParcel}>
+    <Modal title={<span className="flex items-center gap-2">{scanning && !bytes ? <QrCode size={18} /> : <Link2 size={18} />} {done ? 'Added to Folio' : scanning && !bytes ? 'Receive with Beam' : 'Open a shared link'}</span>} onClose={closeParcel}>
       {done ? (
         <div className="space-y-4 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent text-on-accent"><Check size={28} strokeWidth={3} /></div>
@@ -212,6 +247,11 @@ function ReceiveDialog({ link, onOpenNote }: { link?: string; onOpenNote: (id: s
             <button type="button" className={done.first ? secondary : primary} onClick={closeParcel}>Done</button>
           </div>
         </div>
+      ) : !bytes && scanning ? (
+        <div className="space-y-3">
+          <BeamScanner onResult={(r) => { setScanning(false); if ('bytes' in r) start(r.bytes, null); else { setPasted(r.link); openPasted(r.link) } }} />
+          <button type="button" className={secondary + ' w-full'} onClick={() => setScanning(false)}><Link2 size={15} /> Paste a link instead</button>
+        </div>
       ) : !bytes ? (
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); openPasted(pasted) }}>
           <p className="text-[13.5px] leading-5 text-muted">Folio links open by themselves when you tap them. If a link opened in another browser, paste it here.</p>
@@ -219,6 +259,7 @@ function ReceiveDialog({ link, onOpenNote }: { link?: string; onOpenNote: (id: s
             className="w-full resize-none rounded-lg border border-line bg-canvas px-3 py-2 font-mono text-[12.5px] outline-none focus:border-accent" />
           {err && <p className="text-[13px] text-danger">{err}</p>}
           <div className="flex gap-2">
+            <button type="button" className={secondary} onClick={() => { setErr(''); setScanning(true) }}><Camera size={16} /> Scan a code</button>
             {!!navigator.clipboard?.readText && <button type="button" className={secondary} onClick={pasteFromClipboard}><ClipboardPaste size={16} /> Paste</button>}
             <button className={primary} disabled={!pasted.trim()}>Open</button>
           </div>

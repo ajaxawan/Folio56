@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
-  Archive, ArchiveRestore, ArrowDownUp, Compass, BookOpen, BookOpenText, CalendarCheck, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon,
+  Archive, ArchiveRestore, ArrowDownUp, Compass, BookOpen, BookOpenText, CalendarCheck, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon, QrCode, RefreshCw,
   Layers, Link2, Mic, PanelLeftOpen, Presentation, Palette, Pin, RotateCcw, Search, Send, Settings as SettingsIcon, SquarePen, Sun, BookMarked, FilePlus2, Trash2, X,
 } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -17,7 +17,8 @@ import { Composer } from './components/Composer'
 import { NotebookPicker } from './components/LabelPicker'
 import { PageStrip, PagesView } from './components/PagesView'
 import { pageIds } from './lib/kinds'
-import { receiveParcel, sendNotes, useParcelRequest } from './lib/parcelBus'
+import { checkForUpdate } from './lib/updates'
+import { receiveParcel, scanBeam, sendNotes, useParcelRequest } from './lib/parcelBus'
 import { Sidebar } from './components/Sidebar'
 import { TasksView } from './components/TasksView'
 import { WeeklyReview } from './components/WeeklyReview'
@@ -411,6 +412,8 @@ export default function App() {
     { id: 'templates', label: 'Manage templates', icon: <LayoutTemplate size={16} />, keywords: 'template gallery edit default', run: () => setTemplates(true) },
     { id: 'export', label: 'Export backup (JSON)', icon: <Download size={16} />, keywords: 'backup json', run: exportAll },
     { id: 'send-all', label: 'Share all notes as a link…', icon: <Send size={16} />, keywords: 'share send link transfer device', run: () => sendNotes('all') },
+    { id: 'update', label: 'Check for updates', icon: <RefreshCw size={16} />, keywords: 'update new version reload refresh upgrade', run: async () => { const st = await checkForUpdate(); if (st === 'current') toast('You have the latest version'); else if (st === 'offline') toast('Can’t check while offline'); else if (st === 'unsupported') location.reload() } },
+    { id: 'beam-receive', label: 'Receive with Beam (scan a code)…', icon: <QrCode size={16} />, keywords: 'beam qr scan camera receive share transfer phone', run: scanBeam },
     { id: 'receive', label: 'Open a shared link…', icon: <Link2 size={16} />, keywords: 'receive import paste link', run: () => receiveParcel() },
     { id: 'settings', label: 'Settings', icon: <SettingsIcon size={16} />, run: () => setSettings(true) },
   ]
@@ -567,7 +570,7 @@ export default function App() {
             )}
 
             <div ref={mainScroll} className="main-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-28 pt-2 sm:px-6 md:pb-16" onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 44)} onClick={(e) => { if (e.target === e.currentTarget && selected.size) setSelected(new Set()) }}>
-              {view.kind === 'pages' ? <div className="pt-4"><PagesView notes={notes} onOpen={openNote} /></div>
+              {view.kind === 'pages' ? <div className="pt-4"><PagesView notes={notes} onOpen={openNote} onImport={() => setImporting([])} /></div>
                 : view.kind === 'tasks' ? <div className="pt-4"><TasksView notes={notes} onOpen={openNote} onReview={() => setView({ kind: 'review' })} /></div>
                 : view.kind === 'review' ? <div className="pt-4"><WeeklyReview notes={notes} onOpen={openNote} /></div>
                 : view.kind === 'journal' ? <div className="pt-4"><JournalView notes={notes} onOpen={openNote} onSpeak={() => setRecording('journal')} /></div>
@@ -671,12 +674,12 @@ export default function App() {
         {parcelReq && <ParcelHost onOpenNote={openNote} />}
         {stackHint && <SeriesSheet ids={stackHint.ids} suggestion={stackHint.name} onClose={() => setStackHint(null)} />}
         {stackIds && <SeriesSheet ids={stackIds} onClose={() => setStackIds(null)} suggestion={labels.find((l) => stackIds.every((id) => notes.find((n) => n.id === id)?.labels.includes(l.id)))?.name} />}
-        {create && <CreateSheet onClose={() => setCreate(false)} onNote={newNote} onList={newList} onVoice={() => setRecording('memo')} onPhoto={newPhoto} onTemplate={() => setTemplates(true)} onToday={today} onLink={() => receiveParcel()} onDeck={() => setDeckMaker(true)} />}
+        {create && <CreateSheet onClose={() => setCreate(false)} onNote={newNote} onList={newList} onVoice={() => setRecording('memo')} onPhoto={newPhoto} onTemplate={() => setTemplates(true)} onPage={newPage} onToday={today} onReceive={scanBeam} onDeck={() => setDeckMaker(true)} />}
         {recording && <VoiceRecorder journal={recording === 'journal'} labelIds={labelCtx} onClose={() => setRecording(false)} onSaved={(id) => { setRecording(false); openNote(id) }} />}
       </Suspense>
       {importing && (
         <Suspense fallback={null}>
-          <ImportDialog initialFiles={importing} defaultLabelIds={labelCtx} onClose={() => setImporting(null)} onDone={(created) => { setImporting(null); if (created.length === 1) openNote(created[0].id) }} />
+          <ImportDialog initialFiles={importing} defaultLabelIds={labelCtx} defaultAs={view.kind === 'pages' ? 'page' : 'note'} onClose={() => setImporting(null)} onDone={(created) => { setImporting(null); if (created.length === 1) openNote(created[0].id); else if (created.some((n) => n.kind === 'page') && view.kind !== 'label') setView({ kind: 'pages' }) }} />
         </Suspense>
       )}
     </div>

@@ -24,7 +24,7 @@ const seed = (days) => new Promise((res) => {
     }
     mk('g', 'Groceries', [{ type: 'checkListItem', props: { checked: false }, content: t('Oat milk') }, { type: 'checkListItem', props: { checked: true }, content: t('Coffee beans') }])
     mk('w', 'Weekly sync — minutes', [{ type: 'heading', props: { level: 2 }, content: t('Decisions') }, { type: 'bulletListItem', content: t('Ship the onboarding flow on Thursday') }, { type: 'heading', props: { level: 2 }, content: t('Action items') },
-      { type: 'checkListItem', props: { checked: false }, content: t(`Send the roadmap draft 📅 ${yest}`) }, { type: 'checkListItem', props: { checked: false }, content: t('Fix the export bug') }], { memo: { status: 'done', style: 'minutes', audio: [], duration: 60, v: 1 }, createdAt: now - 2 * D })
+      { type: 'checkListItem', props: { checked: false }, content: t(`Send the roadmap draft 📅 ${yest}`) }, { type: 'checkListItem', props: { checked: false }, content: t('Fix the export bug') }], { memo: { status: 'done', style: 'minutes', audio: [], duration: 60, v: 1 }, createdAt: now - 60e3 }) // this week, whatever day the tests run
     mk('p', 'Photosynthesis essay', [{ type: 'paragraph', content: t('Chlorophyll absorbs light, mostly in the blue and red wavelengths, and the energy splits water molecules.') }])
     mk('a', 'Atlas', [{ type: 'paragraph', content: t('Maps of everything.') }])
     mk('b', 'Budget', [{ type: 'paragraph', content: t('Rent and utilities.') }])

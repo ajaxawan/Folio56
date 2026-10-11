@@ -335,7 +335,7 @@ async function openNote(p, title) { await p.locator('article', { hasText: title 
   await check('phone: create + open + back, no overflow', d3.p, async () => {
     // phones create through the + sheet (the inline composer is a desktop/tablet thing)
     await d3.p.getByRole('button', { name: 'Create' }).click();
-    await d3.p.getByRole('button', { name: 'Note Blank page' }).click();
+    await d3.p.getByRole('button', { name: 'Note A quick card' }).click();
     await d3.p.getByLabel('Title').fill('Phone note'); await d3.p.locator('.bn-editor').click(); await d3.p.keyboard.type('tiny screen'); await d3.p.waitForTimeout(600);
     await closeEditor(d3.p);
     await openNote(d3.p, 'Phone note'); await d3.p.screenshot({ path: `${OUT}/07-phone-editor.png` }); await closeEditor(d3.p);

@@ -1,6 +1,8 @@
 import { AlertTriangle, Download, RefreshCw, Sparkles } from 'lucide-react'
 import { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react'
 import { exportAll } from '../lib/db'
+import { applyUpdate, startUpdates, updatedFrom, useUpdateState, WHATS_NEW } from '../lib/updates'
+import { Modal } from './ui'
 
 /**
  * Catches a crash in part of the app and shows a calm screen instead of a blank page.
@@ -34,20 +36,38 @@ export class ErrorBoundary extends Component<{ children: ReactNode; area?: 'app'
 
 /** "A new version is ready" — the app never swaps itself out from under you mid-sentence. */
 export function UpdateToast() {
-  const [update, setUpdate] = useState<null | ((reload?: boolean) => Promise<void>)>(null)
+  const state = useUpdateState()
   const [hidden, setHidden] = useState(false)
-  useEffect(() => {
-    if (!('serviceWorker' in navigator) || import.meta.env.DEV) return
-    import('virtual:pwa-register').then(({ registerSW }) => {
-      const fn = registerSW({ onNeedRefresh: () => setUpdate(() => fn) })
-    }).catch(() => {})
-  }, [])
-  if (!update || hidden) return null
+  const [news, setNews] = useState(() => !!updatedFrom)
+  const [open, setOpen] = useState(false)
+  useEffect(() => { startUpdates() }, [])
   return (
-    <div role="status" className="animate-rise fixed bottom-20 left-1/2 z-[80] flex -translate-x-1/2 items-center gap-3 rounded-full border border-line bg-pop py-1.5 pl-4 pr-1.5 text-[13.5px] text-ink shadow-2xl md:bottom-6">
-      <Sparkles size={15} className="text-accent" /> A new version of Folio is ready
-      <button type="button" onClick={() => setHidden(true)} className="rounded-full px-3 py-1.5 text-muted hover:bg-wash">Later</button>
-      <button type="button" onClick={() => update(true)} className="rounded-full bg-accent px-3.5 py-1.5 font-medium text-on-accent">Update</button>
-    </div>
+    <>
+      {state === 'ready' && !hidden ? (
+        <div role="status" className="animate-rise fixed bottom-20 left-1/2 z-[80] flex -translate-x-1/2 items-center gap-3 rounded-full border border-line bg-pop py-1.5 pl-4 pr-1.5 text-[13.5px] text-ink shadow-2xl md:bottom-6">
+          <Sparkles size={15} className="text-accent" /> A new version of Folio is ready
+          <button type="button" onClick={() => setHidden(true)} className="rounded-full px-3 py-1.5 text-muted hover:bg-wash">Later</button>
+          <button type="button" onClick={() => applyUpdate()} className="rounded-full bg-accent px-3.5 py-1.5 font-medium text-on-accent">Update</button>
+        </div>
+      ) : news && (
+        <div role="status" className="animate-rise fixed bottom-20 left-1/2 z-[80] flex max-w-[94vw] -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-pop py-1.5 pl-4 pr-1.5 text-[13.5px] text-ink shadow-2xl md:bottom-6">
+          <Sparkles size={15} className="shrink-0 text-accent" /> <span className="truncate">Folio56 is now {WHATS_NEW.version}</span>
+          <button type="button" onClick={() => setNews(false)} className="rounded-full px-3 py-1.5 text-muted hover:bg-wash">Dismiss</button>
+          <button type="button" onClick={() => { setNews(false); setOpen(true) }} className="shrink-0 rounded-full bg-accent px-3.5 py-1.5 font-medium text-on-accent">What’s new</button>
+        </div>
+      )}
+      {open && <WhatsNewDialog onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
+export function WhatsNewDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title={<span className="flex items-center gap-2"><Sparkles size={17} className="text-accent" /> New in Folio56 {WHATS_NEW.version}</span>} onClose={onClose}>
+      <ul className="space-y-2.5 text-[14px] leading-6 text-ink-2">
+        {WHATS_NEW.items.map((t) => <li key={t} className="flex gap-2.5"><span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />{t}</li>)}
+      </ul>
+      <button type="button" onClick={onClose} className="mt-5 w-full rounded-lg bg-accent py-2.5 text-[14px] font-medium text-on-accent">Got it</button>
+    </Modal>
   )
 }

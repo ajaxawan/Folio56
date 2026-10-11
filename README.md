@@ -1,4 +1,4 @@
-# Folio56 — 6.2 (web app)
+# Folio56 — 6.3 (web app)
 
 Private, offline notes: Google Keep outside, Notion inside.
 Everything is stored in the browser on each device (IndexedDB). No accounts, no server, no cloud database.
@@ -23,6 +23,19 @@ Export a backup in Settings first, just in case. Drop the whole folder (not just
 3. Open the URL on the laptop (Chrome/Edge → Install app) and on the Tab A9 (Chrome → ⋮ → Add to Home screen / Install).
 
 Vercel only serves the app's static files; your notes never go to Vercel. After the first load, the app works fully offline.
+
+## New in 6.3
+
+- **Folio Beam — share by QR, screen to camera.** Share → **Beam (QR)**. A short note is one QR code holding the share link, so any phone camera opens it in Folio56. Anything bigger plays as a short loop of codes that Folio on the other device reads with its camera (**Receive with Beam**: the + menu on phones, Ctrl K, or Settings). Nothing goes over the internet or through a chat app.
+  - The packed notes (the same compact format as share links) are cut into 240-byte blocks. The first pass shows each block once; after that every code mixes about half the blocks (a random linear fountain code, solved on the receiver by Gaussian elimination). A receiver can start at any moment and needs only a few codes more than there are blocks, however many it misses.
+  - Each code is `FB:` + Base45 (RFC 9285), which fits QR's compact alphanumeric mode. `src/lib/beam.ts` is pure and tested on its own; QR drawing is `qrcode`, reading uses the browser's BarcodeDetector where there is one and jsQR in a worker otherwise.
+  - Steady / Fast speeds, pause, the screen stays awake while beaming, the camera turns off when done. No camera? **Use a picture of a code** reads a screenshot or photo.
+- **Updates you can see.** Folio checks for a new version on start, every 30 minutes while open and when you come back to it. **Settings → About → Check for updates** (also in Ctrl K) finds it, and **Update now** installs it and reloads. After a minor-version update a one-time **What’s new** toast appears.
+- **Import Markdown as notes or as pages.** The import dialog has **Import as: Notes | Pages** (it starts as pages when opened from Pages, which now has an **Import** button). As notes, files land on the board and each sub-folder becomes a **notebook**; as pages, sub-folders become pages and you can pick a page to put them inside. Folio's Markdown export writes `kind: page`, and the importer honours it.
+- **Move to…** in a page's ⋯ menu puts it (and everything inside it) under another page, or back at the top of Pages. On a quick note it's **Move inside a page…** and the note becomes a page.
+- Phones: the + menu has **Page** and **Receive**.
+- Fix: anything inside a page always counts as a page, so it can never be hidden between the board and the Pages tree.
+- Tests: `tests/v63.cjs` (33 checks, including a fake camera filming the beam with a quarter of the codes dropped) and `tests/v63-update.cjs` (a real service-worker update: build, check, update, reload).
 
 ## New in 6.2 — Notes, pages and notebooks
 

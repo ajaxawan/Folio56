@@ -1,5 +1,7 @@
-import { Check, FileDown, FileUp, KeyRound, LayoutTemplate, Link2, Send } from 'lucide-react'
-import { receiveParcel, sendNotes } from '../lib/parcelBus'
+import { Check, FileDown, FileUp, KeyRound, LayoutTemplate, Link2, QrCode, RefreshCw, Send } from 'lucide-react'
+import { receiveParcel, scanBeam, sendNotes } from '../lib/parcelBus'
+import { applyUpdate, checkForUpdate, useUpdateState } from '../lib/updates'
+import { WhatsNewDialog } from './Safety'
 import { useEffect, useRef, useState } from 'react'
 import { hasPasscode } from '../lib/db'
 import { setSessionPasscode } from '../lib/crypto'
@@ -160,10 +162,11 @@ export function SettingsDialog({ onClose, noteCount, onImport, onExport, onTempl
         <p className="mt-1.5 text-[12px] text-faint">Markdown, Word, web page or text — for one note, a selection or everything.</p>
       </Row>
       <Row label="Share between devices">
-        <p className="mb-2 text-[12.5px] leading-5 text-muted">Notes travel inside a link, encrypted with a code. No server, no account. To share just a few, select them and tap Share.</p>
+        <p className="mb-2 text-[12.5px] leading-5 text-muted">Notes travel inside a link, encrypted with a code — or, with <b className="text-ink-2">Beam</b>, as QR codes from one screen to another camera. No server, no account. To share just a few, select them and tap Share.</p>
         <div className="flex gap-2">
           <button type="button" onClick={() => { onClose(); sendNotes('all') }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-wash px-3 py-2.5 text-[14px] hover:bg-wash-2"><Send size={16} /> Share all</button>
           <button type="button" onClick={() => { onClose(); receiveParcel() }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-wash px-3 py-2.5 text-[14px] hover:bg-wash-2"><Link2 size={16} /> Open a link</button>
+          <button type="button" onClick={() => { onClose(); scanBeam() }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-wash px-3 py-2.5 text-[14px] hover:bg-wash-2"><QrCode size={16} /> Receive</button>
         </div>
       </Row>
       <Row label="About">
@@ -172,8 +175,26 @@ export function SettingsDialog({ onClose, noteCount, onImport, onExport, onTempl
           <button type="button" onClick={() => { onClose(); onWelcome() }} className="rounded-lg bg-wash px-3 py-2 hover:bg-wash-2">Show the welcome guide</button>
           <a href="/welcome" target="_blank" rel="noopener" className="rounded-lg bg-wash px-3 py-2 hover:bg-wash-2">About Folio56 ↗</a>
         </div>
+        <UpdateRow />
       </Row>
       {dialog && <PasscodeDialog mode={pass ? 'enter' : 'set'} onCancel={() => setDialog(false)} onDone={() => { setDialog(false); setPass(true); setMsg('Passcode ready. Locked notes open for this session.') }} />}
     </Modal>
+  )
+}
+
+/** V6.3: check for a new version by hand, and install it when one is waiting. */
+function UpdateRow() {
+  const state = useUpdateState()
+  const [news, setNews] = useState(false)
+  const note = { idle: '', checking: 'Checking…', current: 'You have the latest version.', offline: 'Can’t check while offline. Folio keeps working.', unsupported: 'Updates install when you reload this page.', ready: 'A new version is ready.' }[state]
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-[13.5px]">
+      <span role="status" className={`mr-auto ${state === 'ready' ? 'font-medium text-accent-ink' : 'text-muted'}`}>{note}</span>
+      <button type="button" onClick={() => setNews(true)} className="rounded-lg px-3 py-2 text-ink-2 hover:bg-wash">What’s new</button>
+      {state === 'ready' || state === 'unsupported'
+        ? <button type="button" onClick={() => applyUpdate()} className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 font-medium text-on-accent"><RefreshCw size={14} /> {state === 'ready' ? 'Update now' : 'Reload'}</button>
+        : <button type="button" disabled={state === 'checking'} onClick={() => checkForUpdate()} className="flex items-center gap-1.5 rounded-lg bg-wash px-3 py-2 hover:bg-wash-2 disabled:opacity-60"><RefreshCw size={14} className={state === 'checking' ? 'animate-spin' : ''} /> Check for updates</button>}
+      {news && <WhatsNewDialog onClose={() => setNews(false)} />}
+    </div>
   )
 }

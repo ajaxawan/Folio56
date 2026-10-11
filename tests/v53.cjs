@@ -138,7 +138,7 @@ const noOverflow = (p) => p.evaluate(() => document.scrollingElement.scrollWidth
 
     // formalise a typed note
     await p.getByRole('button', { name: 'Create' }).click();
-    await p.getByRole('button', { name: 'Note Blank page' }).click();
+    await p.getByRole('button', { name: 'Note A quick card' }).click();
     await p.getByLabel('Title').fill('Client call');
     await p.locator('.bn-editor').click();
     await p.keyboard.type('talked to client about budget. they want call back tuesday. idea: bundle O&M with EPC. need to send revised quote', { delay: 2 });

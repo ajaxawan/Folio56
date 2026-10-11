@@ -5,7 +5,7 @@ import '@blocknote/mantine/style.css'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Archive, ArchiveRestore, ArrowLeft, Check, Compass, Link2, ListTree, Printer, ChevronRight, Copy, Download, FilePlus2, FileText, History, LayoutTemplate,
-  Image as ImageIcon, Layers, Presentation, Lock, LockOpen, Maximize2, MessageCircle, Mic, Smile, Sparkles, Grid3x3, Minimize2, MoreHorizontal, Palette, Pin, Plus, Send, Sun, BookOpen, FileText as PageIcon, StickyNote, Trash2, Type,
+  Image as ImageIcon, Layers, Presentation, Lock, LockOpen, Maximize2, MessageCircle, Mic, Smile, Sparkles, Grid3x3, Minimize2, MoreHorizontal, Palette, Pin, Plus, Send, Sun, BookOpen, FileText as PageIcon, FolderInput, StickyNote, Trash2, Type,
 } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { COVERS, EMOJI, surface, swatch } from '../lib/colors'
@@ -41,6 +41,7 @@ import { formaliseText, isProcessing, processMemo } from '../lib/voice'
 import { SaveTemplateDialog, TemplateDraftBar } from './TemplateBits'
 import { toast } from '../lib/toast'
 import { isPage } from '../lib/kinds'
+import { MovePageDialog } from './MovePage'
 const TemplateGallery = lazy(() => import('./TemplateGallery').then((m) => ({ default: m.TemplateGallery })))
 const ExportDialog = lazy(() => import('./ExportDialog').then((m) => ({ default: m.ExportDialog })))
 const DeckStudio = lazy(() => import('./DeckStudio').then((m) => ({ default: m.DeckStudio })))
@@ -159,6 +160,7 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
   const [exporting, setExporting] = useState(false)
   const [deckOpen, setDeckOpen] = useState(false)
   const [ravOpen, setRavOpen] = useState(false)
+  const [moving, setMoving] = useState(false)
   const insertAt = useRef<string | null>(null)
   const draft = note.templateDraft ?? null
   const busy = !!note.memo && (note.memo.status === 'transcribing' || note.memo.status === 'writing') && isProcessing(note.id)
@@ -522,6 +524,7 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
               {canKind && (page
                 ? <MenuItem icon={<StickyNote size={15} />} onClick={() => { setMenu(null); makeNote() }}>Turn into a note</MenuItem>
                 : <MenuItem icon={<PageIcon size={15} />} onClick={() => { setMenu(null); makePage(); toast('Turned into a page — find it under Pages', () => patchNote(note.id, { kind: note.kind })) }}>Turn into a page</MenuItem>)}
+              {canKind && !note.locked && <MenuItem icon={<FolderInput size={15} />} onClick={async () => { setMenu(null); await persist({ title: title.trim() }); setMoving(true) }}>{page ? 'Move to…' : 'Move inside a page…'}</MenuItem>}
               {!draft && <MenuItem icon={<Pin size={15} />} onClick={() => { setMenu(null); patchNote(note.id, { pinned: !note.pinned }) }}>{note.pinned ? 'Unpin' : 'Pin'}</MenuItem>}
               {!draft && <MenuItem icon={note.locked ? <LockOpen size={15} /> : <Lock size={15} />} onClick={toggleLock}>{note.locked ? 'Remove lock' : 'Lock with passcode'}</MenuItem>}
               {!draft && !note.locked && <MenuItem icon={<LayoutTemplate size={15} />} onClick={async () => { setMenu(null); await persist({ title: title.trim() }); setSaveTpl(true) }}>Save as template…</MenuItem>}
@@ -714,6 +717,7 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
           onInsert={(blocks) => { setTplInsert(false); insertTemplate(blocks) }} />}
         {exporting && <ExportDialog scope={{ ids: [note.id] }} onClose={() => setExporting(false)} />}
         {deckOpen && <DeckMaker source={{ kind: 'note', id: note.id }} onClose={() => setDeckOpen(false)} onCreated={(id) => { setDeckOpen(false); go(id) }} />}
+        {moving && <MovePageDialog note={note} onClose={() => setMoving(false)} />}
         {ravOpen && <RavDialog noteId={note.id} onClose={() => setRavOpen(false)} onDone={(id) => { setRavOpen(false); go(id) }} />}
       </Suspense>
       {formalise && (

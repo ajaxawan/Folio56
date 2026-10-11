@@ -1,3 +1,4 @@
+import { pageIds } from './kinds'
 import { BlockNoteEditor } from '@blocknote/core'
 import { strToU8, zipSync } from 'fflate'
 import type { ColorKey, Note } from '../types'
@@ -31,6 +32,8 @@ export interface ParsedDoc {
   color: ColorKey | null
   icon: string | null
   pinned: boolean
+  /** V6.3: front matter `kind: page` / `kind: note` (Folio's own exports write it). */
+  kind: 'page' | 'note' | null
   created: number | null
   words: number
   stats: { headings: number; tables: number; code: number; tasks: number; images: number }
@@ -42,6 +45,8 @@ export interface ImportOptions {
   keepFolders: boolean
   parentId: string | null
   labelIds: string[]
+  /** V6.3: land as quick notes (folders → notebooks) or as pages (folders → pages). */
+  as: 'note' | 'page'
   color: ColorKey | null
   remoteImages: 'link' | 'keep'
 }
@@ -132,6 +137,7 @@ export function parseMarkdown(text: string, fileName: string, path: string, opts
   return {
     path, fileName, title, blocks, tags, color, pinned: meta.pinned === 'true',
     icon: typeof meta.icon === 'string' ? meta.icon : typeof meta.emoji === 'string' ? meta.emoji : null,
+    kind: meta.kind === 'page' || meta.kind === 'note' ? meta.kind : null,
     created, words, stats, missingImages: [],
   }
 }
@@ -189,13 +195,14 @@ export async function importDocs(docs: ParsedDoc[], images: Map<string, File>, o
   }
   const folderPages = new Map<string, string>()
   const folderId = async (dir: string): Promise<string | null> => {
+    if (opts.as === 'note') return null
     if (!opts.keepFolders || !dir) return opts.parentId
     // skip the top-level picked folder itself so its contents land at the destination
     const parts = dir.split('/')
     if (parts.length === 1) return opts.parentId
     if (folderPages.has(dir)) return folderPages.get(dir)!
     const parent = await folderId(parts.slice(0, -1).join('/'))
-    const page = await createNote({ title: parts[parts.length - 1], icon: '📁', parentId: parent, labels: opts.labelIds })
+    const page = await createNote({ title: parts[parts.length - 1], icon: '📁', parentId: parent, labels: opts.labelIds, kind: 'page' })
     folderPages.set(dir, page.id)
     return page.id
   }
@@ -204,9 +211,13 @@ export async function importDocs(docs: ParsedDoc[], images: Map<string, File>, o
   for (const d of docs) {
     await resolveImages(d, images, true)
     const tagIds = await Promise.all(d.tags.map(labelId))
+    // as notes, the folder a file sat in becomes its notebook (the picked folder itself doesn't count)
+    const dirParts = dirname(d.path).split('/').filter(Boolean)
+    const folderBook = opts.as === 'note' && opts.keepFolders && dirParts.length > 1 ? [await labelId(dirParts[dirParts.length - 1])] : []
+    const kind = d.kind ?? opts.as
     const note = await createNote({
-      title: d.title, content: d.blocks, parentId: await folderId(dirname(d.path)),
-      labels: Array.from(new Set([...opts.labelIds, ...tagIds])),
+      title: d.title, content: d.blocks, parentId: kind === 'page' ? await folderId(dirname(d.path)) : null,
+      labels: Array.from(new Set([...opts.labelIds, ...folderBook, ...tagIds])), kind,
       color: opts.color ?? d.color ?? 'default', icon: d.icon, pinned: d.pinned,
       ...(d.created ? { createdAt: d.created } : {}),
     })
@@ -219,7 +230,7 @@ export async function importDocs(docs: ParsedDoc[], images: Map<string, File>, o
 // ---------------- export ----------------
 const safe = (s: string) => (s || 'Untitled').replace(/[\\/:*?"<>|#^[\]]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Untitled'
 
-export function noteToMarkdown(n: Note, labelNames: Record<string, string>) {
+export function noteToMarkdown(n: Note, labelNames: Record<string, string>, page = n.kind === 'page') {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const body = ed().blocksToMarkdownLossy((n.content?.length ? n.content : []) as any)
   const fm = ['---', `title: ${JSON.stringify(n.title || 'Untitled')}`]
@@ -227,6 +238,7 @@ export function noteToMarkdown(n: Note, labelNames: Record<string, string>) {
   if (n.color !== 'default') fm.push(`color: ${n.color}`)
   if (n.icon) fm.push(`icon: ${n.icon}`)
   if (n.pinned) fm.push('pinned: true')
+  if (page) fm.push('kind: page')
   fm.push(`created: ${new Date(n.createdAt).toISOString()}`, `updated: ${new Date(n.updatedAt).toISOString()}`, '---', '')
   return `${fm.join('\n')}\n# ${n.title || 'Untitled'}\n\n${body}`
 }
@@ -237,6 +249,7 @@ export async function buildMarkdownFiles() {
   const notes = (await db.notes.toArray()).filter((n) => n.trashedAt === null && !n.locked && !n.templateDraft)
   const labelNames = Object.fromEntries((await db.labels.toArray()).map((l) => [l.id, l.name]))
   const byId = new Map(notes.map((n) => [n.id, n]))
+  const pages = pageIds(notes)
   const files: Record<string, Uint8Array> = {}
   const used = new Set<string>()
   const pathOf = (n: Note): string => {
@@ -269,7 +282,7 @@ export async function buildMarkdownFiles() {
     let k = 2
     while (used.has(name)) name = `${dir ? dir + '/' : ''}${safe(n.title)} ${k++}.md`
     used.add(name)
-    files[name] = strToU8(noteToMarkdown({ ...n, content }, labelNames))
+    files[name] = strToU8(noteToMarkdown({ ...n, content }, labelNames, pages.has(n.id)))
   }
   return { files, count: notes.length }
 }

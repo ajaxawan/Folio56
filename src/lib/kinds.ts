@@ -12,9 +12,10 @@ export function pageIds(notes: Note[]): Set<string> {
   for (const n of notes) if (n.parentId && n.trashedAt === null) hasKids.add(n.parentId)
   const out = new Set<string>()
   for (const n of notes) {
-    if (n.kind === 'page' || (n.kind === undefined && !n.daily && !n.deck && (!!n.parentId || hasKids.has(n.id)))) out.add(n.id)
+    if (isPage(n, hasKids.has(n.id))) out.add(n.id)
   }
   return out
 }
 /** The same test for one note, when you know whether it has pages inside. */
-export const isPage = (n: Note, hasKids: boolean) => n.kind === 'page' || (n.kind === undefined && !n.daily && !n.deck && (!!n.parentId || hasKids))
+// Anything inside a page is a page (a note can't live inside one), whatever kind it was given.
+export const isPage = (n: Note, hasKids: boolean) => !n.daily && !n.deck && (n.kind === 'page' || !!n.parentId || (n.kind === undefined && hasKids))

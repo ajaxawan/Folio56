@@ -4,7 +4,8 @@ import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { readFileSync } from 'node:fs'
 
-const version = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version as string
+// FOLIO_VERSION lets the update test build a "newer" copy without touching package.json
+const version = process.env.FOLIO_VERSION || (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version as string)
 
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(version) },

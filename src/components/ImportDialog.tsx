@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle2, ClipboardPaste, Code2, FileText, FolderOpe
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { dot, swatch } from '../lib/colors'
 import { db } from '../lib/db'
+import { pageIds } from '../lib/kinds'
 import { importDocs, isImageFile, isMarkdownFile, parseMarkdown, relPath, resolveImages, type ImportOptions, type ParsedDoc } from '../lib/markdown'
 import { editorExtensions, normalizeCode, schema } from '../lib/editorSchema'
 import { usePrefs } from '../lib/prefs'
@@ -16,7 +17,7 @@ import { IconButton, Popover, Segmented } from './ui'
 
 interface Raw { text: string; name: string; path: string }
 
-export default function ImportDialog({ initialFiles, defaultLabelIds = [], onClose, onDone }: { initialFiles?: File[]; defaultLabelIds?: string[]; onClose: () => void; onDone: (notes: Note[]) => void }) {
+export default function ImportDialog({ initialFiles, defaultLabelIds = [], defaultAs = 'note', onClose, onDone }: { initialFiles?: File[]; defaultLabelIds?: string[]; defaultAs?: 'note' | 'page'; onClose: () => void; onDone: (notes: Note[]) => void }) {
   const { dark } = usePrefs()
   const [raws, setRaws] = useState<Raw[]>([])
   const [images, setImages] = useState<Map<string, File>>(new Map())
@@ -25,14 +26,17 @@ export default function ImportDialog({ initialFiles, defaultLabelIds = [], onClo
   const [pasteName, setPasteName] = useState('')
   const [sel, setSel] = useState(0)
   const [skip, setSkip] = useState<Set<number>>(new Set())
-  const [opts, setOpts] = useState<ImportOptions>({ titleFrom: 'heading', keepFolders: true, parentId: null, labelIds: defaultLabelIds, color: null, remoteImages: 'link' })
+  const [opts, setOpts] = useState<ImportOptions>({ titleFrom: 'heading', keepFolders: true, parentId: null, labelIds: defaultLabelIds, color: null, remoteImages: 'link', as: defaultAs })
   const [menu, setMenu] = useState<null | 'label' | 'color'>(null)
   const [busy, setBusy] = useState<null | number>(null)
   const [done, setDone] = useState<Note[] | null>(null)
   const [drag, setDrag] = useState(false)
   const folderInput = useRef<HTMLInputElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
-  const pages = useLiveQuery(() => db.notes.filter((n) => n.trashedAt === null && !n.locked && !n.templateDraft).toArray(), []) ?? []
+  const live = useLiveQuery(() => db.notes.filter((n) => n.trashedAt === null && !n.locked && !n.templateDraft).toArray(), [])
+  const pages = useMemo(() => { const all = live ?? []; const ids = pageIds(all); return all.filter((n) => ids.has(n.id)) }, [live])
+  const asPages = opts.as === 'page'
+  const noun = (k: number) => asPages ? (k === 1 ? 'page' : 'pages') : (k === 1 ? 'note' : 'notes')
   const labels = useLiveQuery(() => db.labels.toArray(), []) ?? []
 
   const addFiles = async (files: File[]) => {
@@ -81,11 +85,12 @@ export default function ImportDialog({ initialFiles, defaultLabelIds = [], onClo
         {done ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
             <CheckCircle2 size={44} className="text-accent" />
-            <p className="font-title text-[22px] font-semibold">Imported {done.length} {done.length === 1 ? 'note' : 'notes'}</p>
+            <p className="font-title text-[22px] font-semibold">Imported {done.length} {noun(done.length)}</p>
+            <p className="text-[13.5px] text-ink-2">{asPages ? 'They’re under Pages.' : 'They’re on the Notes board.'}</p>
             <p className="max-w-sm text-[13.5px] text-muted">Headings, tables, code, checklists and quotes kept their formatting.{chosen.some((d) => d.missingImages.length) ? ' Some images were not found and are marked in the notes.' : ''}</p>
             <div className="mt-2 flex gap-2">
               <button type="button" onClick={() => { setDone(null); setRaws([]); setSkip(new Set()); setSel(0) }} className="rounded-lg px-4 py-2 text-[14px] hover:bg-wash">Import more</button>
-              <button type="button" onClick={() => onDone(done)} className="rounded-lg bg-accent px-4 py-2 text-[14px] font-medium text-on-accent">{done.length === 1 ? 'Open note' : 'Done'}</button>
+              <button type="button" onClick={() => onDone(done)} className="rounded-lg bg-accent px-4 py-2 text-[14px] font-medium text-on-accent">{done.length === 1 ? `Open ${noun(1)}` : 'Done'}</button>
             </div>
           </div>
         ) : raws.length === 0 ? (
@@ -124,19 +129,22 @@ export default function ImportDialog({ initialFiles, defaultLabelIds = [], onClo
           <>
             {/* options */}
             <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-2.5 text-[13px]">
+              <div className="flex items-center gap-2 text-muted" role="group" aria-label="Import as">Import as
+                <div className="w-40 text-ink"><Segmented value={opts.as} onChange={(as) => setOpts({ ...opts, as, parentId: as === 'note' ? null : opts.parentId })} options={[{ value: 'note', label: 'Notes' }, { value: 'page', label: 'Pages' }]} /></div>
+              </div>
               <label className="flex items-center gap-2 text-muted">Title from
                 <select value={opts.titleFrom} onChange={(e) => setOpts({ ...opts, titleFrom: e.target.value as 'heading' | 'filename' })} className="rounded-md border border-line bg-canvas px-2 py-1 text-ink">
                   <option value="heading">First # heading</option><option value="filename">File name</option>
                 </select>
               </label>
-              <label className="flex items-center gap-2 text-muted">Put in
+              {asPages && <label className="flex items-center gap-2 text-muted">Put in
                 <select value={opts.parentId ?? ''} onChange={(e) => setOpts({ ...opts, parentId: e.target.value || null })} className="max-w-48 rounded-md border border-line bg-canvas px-2 py-1 text-ink">
-                  <option value="">Notes (top level)</option>
+                  <option value="">Pages (top level)</option>
                   {pages.sort((a, b) => a.title.localeCompare(b.title)).map((p) => <option key={p.id} value={p.id}>Inside: {p.icon ? p.icon + ' ' : ''}{p.title || 'Untitled'}</option>)}
                 </select>
-              </label>
+              </label>}
               {hasFolders && (
-                <label className="flex items-center gap-1.5"><input type="checkbox" checked={opts.keepFolders} onChange={(e) => setOpts({ ...opts, keepFolders: e.target.checked })} className="accent-[var(--color-accent)]" /> Sub-folders → pages</label>
+                <label className="flex items-center gap-1.5"><input type="checkbox" checked={opts.keepFolders} onChange={(e) => setOpts({ ...opts, keepFolders: e.target.checked })} className="accent-[var(--color-accent)]" /> Sub-folders → {asPages ? 'pages' : 'notebooks'}</label>
               )}
               <div className="relative">
                 <button type="button" onClick={() => setMenu(menu === 'label' ? null : 'label')} className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 hover:bg-wash">
@@ -187,10 +195,10 @@ export default function ImportDialog({ initialFiles, defaultLabelIds = [], onClo
             </div>
 
             <footer className="flex items-center gap-3 border-t border-line px-5 py-3">
-              <p className="flex-1 text-[12.5px] text-muted">{busy !== null ? `Importing ${busy} / ${chosen.length}…` : hasFolders && opts.keepFolders ? 'Folders inside the picked folder become pages that contain their notes.' : 'Tags in front matter become notebooks. Relative images from the folder are embedded.'}</p>
+              <p className="flex-1 text-[12.5px] text-muted">{busy !== null ? `Importing ${busy} / ${chosen.length}…` : hasFolders && opts.keepFolders ? (asPages ? 'Folders inside the picked folder become pages that hold their files.' : 'Each folder inside the picked folder becomes a notebook.') : asPages ? 'Pages land under Pages. Tags in front matter become notebooks.' : 'Notes land on the Notes board. Tags in front matter become notebooks.'}</p>
               <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-[14px] hover:bg-wash">Cancel</button>
               <button type="button" disabled={!chosen.length || busy !== null} onClick={run} className="rounded-lg bg-accent px-4 py-2 text-[14px] font-medium text-on-accent disabled:opacity-50">
-                Import {chosen.length} {chosen.length === 1 ? 'note' : 'notes'}
+                Import {chosen.length} {noun(chosen.length)}
               </button>
             </footer>
           </>

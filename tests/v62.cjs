@@ -134,7 +134,7 @@ const quiet = () => { try { localStorage.setItem('folio.installHint', '1'); loca
     // Settings → About
     await p.getByRole('button', { name: /^Settings/ }).first().click(); await p.waitForTimeout(500)
     const dlg = p.getByRole('dialog', { name: 'Settings' })
-    ok('Settings → About shows the version', /Folio56\s*6\.2\.0/.test(await dlg.innerText()))
+    ok('Settings → About shows the version', new RegExp('Folio56\\s*' + require('../package.json').version.replace(/\./g, '\\.')).test(await dlg.innerText()))
     ok('About links to the welcome page', (await dlg.getByRole('link', { name: /About Folio56/ }).getAttribute('href')) === '/welcome')
     const qc = await dlg.innerText()
     ok('quick-capture links point at /app/', qc.includes(ORIGIN + '/app/?record=memo'))

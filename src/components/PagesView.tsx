@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronRight, FilePlus2, FileText, Lock } from 'lucide-react'
+import { ArrowRight, ChevronRight, FilePlus2, FileText, FileUp, Lock } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { createNote } from '../lib/db'
 import { friendlyDate } from '../lib/device'
@@ -6,7 +6,7 @@ import { pageIds } from '../lib/kinds'
 import type { Note } from '../types'
 
 /** V6.2: the page tree holds pages only (quick notes live on the Notes board). */
-export function PagesView({ notes, onOpen, labelId }: { notes: Note[]; onOpen: (id: string) => void; labelId?: string }) {
+export function PagesView({ notes, onOpen, onImport, labelId }: { notes: Note[]; onOpen: (id: string) => void; onImport?: () => void; labelId?: string }) {
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const [limit, setLimit] = useState(150)
   // One pass to build the tree (was a full scan per row — slow with thousands of pages).
@@ -56,8 +56,11 @@ export function PagesView({ notes, onOpen, labelId }: { notes: Note[]; onOpen: (
           <h1 className="font-title text-[30px] font-bold tracking-tight">Pages</h1>
           <p className="text-[13px] text-muted">{live.length === 1 ? '1 page' : `${live.length} pages`} · for longer writing you nest and organise</p>
         </div>
-        <button type="button" onClick={async () => { const n = await createNote({ kind: 'page', labels: labelId ? [labelId] : [] }); onOpen(n.id) }}
-          className="flex items-center gap-2 rounded-full bg-raised px-3.5 py-2 text-[13px] text-ink hover:bg-wash-2"><FilePlus2 size={15} /> New page</button>
+        <div className="flex shrink-0 gap-1.5">
+          {onImport && <button type="button" onClick={onImport} className="flex items-center gap-2 rounded-full border border-line px-3.5 py-2 text-[13px] text-ink-2 hover:border-accent/50"><FileUp size={15} /> Import</button>}
+          <button type="button" onClick={async () => { const n = await createNote({ kind: 'page', labels: labelId ? [labelId] : [] }); onOpen(n.id) }}
+            className="flex items-center gap-2 rounded-full bg-raised px-3.5 py-2 text-[13px] text-ink hover:bg-wash-2"><FilePlus2 size={15} /> New page</button>
+        </div>
       </div>
       {roots.length ? roots.slice(0, limit).map((n) => <Row key={n.id} n={n} depth={0} />) : (
         <div className="px-3 py-10 text-center text-muted">
