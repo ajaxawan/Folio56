@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Archive, ArchiveRestore, ArrowDownUp, Compass, BookOpen, BookOpenText, CalendarCheck, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon,
-  Layers, Link2, Mic, PanelLeftOpen, Presentation, Palette, Pin, RotateCcw, Search, Send, Settings as SettingsIcon, SquarePen, Sun, Tag, Trash2, X,
+  Layers, Link2, Mic, PanelLeftOpen, Presentation, Palette, Pin, RotateCcw, Search, Send, Settings as SettingsIcon, SquarePen, Sun, BookMarked, FilePlus2, Trash2, X,
 } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
@@ -14,8 +14,9 @@ import { BottomBar, Rail } from './components/NavBars'
 import { ColorPicker } from './components/ColorPicker'
 import type { Command } from './components/CommandPalette'
 import { Composer } from './components/Composer'
-import { LabelPicker } from './components/LabelPicker'
-import { PagesView } from './components/PagesView'
+import { NotebookPicker } from './components/LabelPicker'
+import { PageStrip, PagesView } from './components/PagesView'
+import { pageIds } from './lib/kinds'
 import { receiveParcel, sendNotes, useParcelRequest } from './lib/parcelBus'
 import { Sidebar } from './components/Sidebar'
 import { TasksView } from './components/TasksView'
@@ -24,7 +25,7 @@ import { JournalView } from './components/JournalView'
 import { TodayHero } from './components/TodayHero'
 import { LabelMenu, labelColor, registerLabels } from './components/LabelMenu'
 import { IconButton, MenuItem, Popover, Segmented } from './components/ui'
-import { addLabelToMany, createNote, db, deleteForever, emptyTrash, exportAll, openDaily, patchMany, setTrashed } from './lib/db'
+import { moveToNotebook, createNote, db, deleteForever, emptyTrash, exportAll, openDaily, patchMany, setTrashed } from './lib/db'
 import { fileToDataUrl, pickFile } from './lib/image'
 import { putImage } from './lib/blobs'
 import { textToBlocks } from './lib/preview'
@@ -32,7 +33,7 @@ import { todayKey } from './lib/templates'
 import { usePhone } from './lib/mobile'
 import { InstallHint } from './components/InstallHint'
 import { BackupReminder } from './components/BackupBits'
-import { WelcomeCard } from './components/WelcomeCard'
+import { KindsNews, WelcomeCard } from './components/WelcomeCard'
 import { Toaster } from './components/Toaster'
 import { toast } from './lib/toast'
 import { APP_PATH } from './lib/paths'
@@ -72,6 +73,7 @@ function transition(fn: () => void, noteId?: string | null) {
   const vt = doc.startViewTransition(() => { flushSync(fn); tag() })
   vt.finished.finally(clear)
 }
+const byIdLabels = (notes: Note[], id: string) => notes.find((n) => n.id === id)?.labels
 // Stable empties so memoised views don't recompute while the database is still opening.
 const NO_NOTES: Note[] = []
 const NO_LABELS: Label[] = []
@@ -163,6 +165,7 @@ export default function App() {
     }
     openNote((await createNote({ labels: labelCtx })).id)
   }
+  const newPage = async () => openNote((await createNote({ kind: 'page', labels: labelCtx })).id)
   const newList = async () => openNote((await createNote({ content: [{ type: 'checkListItem', props: { checked: false }, content: '' }], labels: labelCtx })).id)
   const today = async () => openNote((await openDaily()).id)
   const newPhoto = async () => {
@@ -296,6 +299,10 @@ export default function App() {
     for (const n of notes) if (n.parentId && n.trashedAt === null) m.set(n.parentId, (m.get(n.parentId) ?? 0) + 1)
     return m
   }, [notes])
+  // V6.2: pages (long, nested writing) live under Pages and in notebooks; the board shows quick notes.
+  const pages = useMemo(() => pageIds(notes), [notes])
+  const recentPages = useMemo(() => notes.filter((n) => pages.has(n.id) && n.trashedAt === null && !n.archived && !(n.parentId && pages.has(n.parentId)) && !n.templateDraft)
+    .sort((a, b) => b.updatedAt - a.updatedAt), [notes, pages])
   // Recents: the few notes you were just in (daily notes have Today/Journal, so they're left out)
   const recents = useMemo(() => notes.filter((n) => n.trashedAt === null && !n.daily).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 6), [notes])
   const labelCounts = useMemo(() => {
@@ -320,13 +327,15 @@ export default function App() {
     const byId = new Map(notes.map((n) => [n.id, n]))
     const sorted = [...notes].sort(sorter)
     switch (view.kind) {
-      case 'notes': return sorted.filter((n) => !n.parentId && !n.archived && !n.daily && n.trashedAt === null)
+      case 'notes': return sorted.filter((n) => !n.parentId && !n.archived && !n.daily && n.trashedAt === null && !pages.has(n.id))
       case 'archive': return sorted.filter((n) => n.archived && n.trashedAt === null)
       case 'trash': return sorted.filter((n) => n.trashedAt !== null && !(n.parentId && byId.get(n.parentId)?.trashedAt))
-      case 'label': return sorted.filter((n) => n.labels.includes(view.labelId) && n.trashedAt === null)
+      case 'label': return sorted.filter((n) => n.labels.includes(view.labelId) && n.trashedAt === null && !pages.has(n.id))
       default: return []
     }
-  }, [notes, view, sorter])
+  }, [notes, view, sorter, pages])
+  // A notebook's pages: the top ones (pages inside them open from there).
+  const notebookPages = useMemo(() => view.kind !== 'label' ? [] : recentPages.filter((n) => n.labels.includes(view.labelId) && !(n.parentId && byIdLabels(notes, n.parentId)?.includes(view.labelId))), [recentPages, notes, view])
   // Series → one stacked card (notes and label views), unless fanned out.
   const { shown, stacks } = useMemo(() => {
     const stacks = new Map<string, Note[]>()
@@ -379,6 +388,8 @@ export default function App() {
     { id: 'today', label: "Open today's note", icon: <Sun size={16} />, hint: 'T', keywords: 'daily journal', run: today },
     { id: 'tpl', label: 'New from template…', icon: <LayoutTemplate size={16} />, keywords: 'meeting project bug', run: () => setTemplates(true) },
     { id: 'go-notes', label: 'Go to Notes', icon: <Lightbulb size={16} />, run: () => setView({ kind: 'notes' }) },
+    { id: 'new-page', label: 'New page', icon: <FilePlus2 size={16} />, keywords: 'page wiki project doc long nested', run: newPage },
+    ...labels.map((l) => ({ id: `nb-${l.id}`, label: `Open notebook: ${l.name}`, icon: <BookMarked size={16} />, keywords: 'notebook label folder', run: () => setView({ kind: 'label', labelId: l.id }) })),
     { id: 'go-pages', label: 'Go to Pages', icon: <FileText size={16} />, run: () => setView({ kind: 'pages' }) },
     { id: 'go-journal', label: 'Go to Journal', icon: <BookOpen size={16} />, keywords: 'daily calendar diary', run: () => setView({ kind: 'journal' }) },
     { id: 'margins-open', label: 'Open a PDF in Margins…', icon: <BookOpenText size={16} />, keywords: 'pdf read reader book paper document margins', run: async () => { const { pickPdf } = await import('./lib/margins'); const r = await pickPdf(); if (r) openPdfFile(r) } },
@@ -411,7 +422,7 @@ export default function App() {
   )
   const sidebarShown = sidebar && !focus && !(reading && view.kind === 'margins' && !openId)
   const inNotesArea = !['pages', 'tasks', 'journal', 'review'].includes(view.kind)
-  const emptyText = { archive: 'Archived notes rest here', trash: 'Trash is empty', label: 'No notes with this label yet', notes: '' } as Record<string, string>
+  const emptyText = { archive: 'Archived notes rest here', trash: 'Trash is empty', label: notebookPages.length ? 'No quick notes here yet — just pages' : 'Nothing in this notebook yet', notes: '' } as Record<string, string>
 
   return (
     <div className="app-root flex h-full bg-canvas text-ink">
@@ -482,9 +493,9 @@ export default function App() {
                       <Popover open={menu === 'bulkColor'} onClose={() => setMenu(null)} className="right-0 top-11"><ColorPicker onChange={(color) => bulk(() => patchMany(sel, { color }))} /></Popover>
                     </div>
                     <div className="relative">
-                      <IconButton label="Add label" onClick={() => setMenu(menu === 'bulkLabel' ? null : 'bulkLabel')}><Tag size={19} /></IconButton>
+                      <IconButton label="Move to notebook" onClick={() => setMenu(menu === 'bulkLabel' ? null : 'bulkLabel')}><BookMarked size={19} /></IconButton>
                       <Popover open={menu === 'bulkLabel'} onClose={() => setMenu(null)} className="right-0 top-11">
-                        <LabelPicker title="Add label to selected" selected={[]} onChange={(ids) => ids[0] && bulk(() => addLabelToMany(sel, ids[0]))} />
+                        <NotebookPicker title="Move selected to" extras={false} selected={[]} onChange={(ids) => bulk(() => ids[0] ? moveToNotebook(sel, ids[0]) : patchMany(sel, { labels: [] }))} />
                       </Popover>
                     </div>
                     <IconButton label={view.kind === 'archive' ? 'Unarchive' : 'Archive'} onClick={() => bulk(() => patchMany(sel, { archived: view.kind !== 'archive', pinned: false }))}>
@@ -565,9 +576,11 @@ export default function App() {
                     {view.kind === 'notes' && <InstallHint />}
                     {view.kind === 'notes' && <BackupReminder noteCount={notes.length} />}
                     {view.kind === 'notes' && <WelcomeCard noteCount={notes.length} loaded={notesRaw !== undefined} onOpen={openNote} />}
+                    {view.kind === 'notes' && notesRaw !== undefined && <KindsNews pages={recentPages.length} notebooks={labels.length} onPages={() => setView({ kind: 'pages' })} />}
                     {view.kind === 'notes' && <div className="pt-3 max-sm:pt-1"><TodayHero notes={notes} onOpenToday={today} onReview={() => setView({ kind: 'review' })} onTasks={() => setView({ kind: 'tasks' })} onJournal={() => setRecording('journal')} onOpen={openNote} /></div>}
                     {showComposer && list.length === 0 && view.kind === 'notes' ? (
                       <div className="flex flex-col items-center justify-center gap-5 py-6">
+                        {recentPages.length > 0 && <div className="w-full"><PageStrip title="Recent pages" pages={recentPages.slice(0, 4)} kids={childCount} onOpen={openNote} onAll={() => setView({ kind: 'pages' })} /></div>}
                         <div className="w-full max-sm:hidden"><Composer onOpen={openNote} onTemplates={() => setTemplates(true)} onVoice={() => setRecording('memo')} /></div>
                         <button type="button" onClick={() => setCreate(true)} className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface px-4 py-3.5 text-left text-[15px] text-muted sm:hidden"><SquarePen size={18} className="text-accent" /> Write your first note…</button>
                         <div className="flex flex-wrap justify-center gap-2 text-[13px]">
@@ -585,9 +598,9 @@ export default function App() {
                               <div className="flex min-w-0 items-center gap-3">
                                 <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: labelColor(currentLabel) }} />
                                 <h1 className="font-title truncate text-[30px] font-bold tracking-tight">{currentLabel.name}</h1>
-                                <span className="shrink-0 rounded-full bg-wash px-2.5 py-0.5 text-[12px] text-muted">{list.length} {list.length === 1 ? 'note' : 'notes'}</span>
+                                <span className="shrink-0 rounded-full bg-wash px-2.5 py-0.5 text-[12px] text-muted">{list.length} {list.length === 1 ? 'note' : 'notes'}{notebookPages.length ? ` · ${notebookPages.length} ${notebookPages.length === 1 ? 'page' : 'pages'}` : ''}</span>
                                 <div className="relative">
-                                  <IconButton size="sm" label="Label options" onClick={() => setMenu(menu === 'labelMenu' ? null : 'labelMenu')}><MoreHorizontal size={18} /></IconButton>
+                                  <IconButton size="sm" label="Notebook options" onClick={() => setMenu(menu === 'labelMenu' ? null : 'labelMenu')}><MoreHorizontal size={18} /></IconButton>
                                   <LabelMenu label={currentLabel} open={menu === 'labelMenu'} onClose={() => setMenu(null)} className="left-0 top-10" onDeleted={() => setView({ kind: 'notes' })} />
                                 </div>
                               </div>
@@ -598,9 +611,16 @@ export default function App() {
                               <button type="button" onClick={() => { if (confirm('Delete everything in Trash forever?')) emptyTrash() }}
                                 className="flex items-center gap-2 rounded-full px-3 py-1.5 text-[14px] text-accent-ink hover:bg-wash"><Trash2 size={15} /> Empty trash</button>
                             )}
-                            {view.kind === 'label' && <button type="button" onClick={() => setImporting([])} className="flex shrink-0 items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-[13px] text-ink-2 hover:border-accent/50"><FileUp size={14} /> Import into label</button>}
+                            {view.kind === 'label' && (
+                              <div className="flex shrink-0 gap-1.5">
+                                <button type="button" onClick={newPage} className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-[13px] text-ink-2 hover:border-accent/50"><FilePlus2 size={14} /> New page</button>
+                                <button type="button" onClick={() => setImporting([])} className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-[13px] text-ink-2 hover:border-accent/50"><FileUp size={14} /> <span className="max-sm:hidden">Import into notebook</span><span className="sm:hidden">Import</span></button>
+                              </div>
+                            )}
                           </div>
                         )}
+                        {view.kind === 'label' && <PageStrip title="Pages in this notebook" pages={notebookPages} kids={childCount} onOpen={openNote} />}
+                        {view.kind === 'notes' && <PageStrip title="Recent pages" pages={recentPages.slice(0, 4)} kids={childCount} onOpen={openNote} onAll={() => setView({ kind: 'pages' })} />}
                         {showComposer && <div className={`max-sm:hidden ${view.kind === 'label' ? 'pb-8 pt-1' : 'pb-8 pt-0'}`}><Composer onOpen={openNote} labelId={view.kind === 'label' ? view.labelId : undefined} onTemplates={() => setTemplates(true)} onVoice={() => setRecording('memo')} /></div>}
 
                         {stackSuggestion && (
@@ -617,7 +637,7 @@ export default function App() {
                           canDrag={prefs.sort === 'custom' && !trashView} stacks={stacks} onStack={toggleStack} fanned={expanded} />
                         {list.length === 0 && (
                           <div className="py-16 text-center text-[15px] text-muted">
-                            <EmptyArt kind={view.kind === 'archive' ? 'archive' : trashView ? 'trash' : 'label'} />
+                            {!(view.kind === 'label' && notebookPages.length) && <EmptyArt kind={view.kind === 'archive' ? 'archive' : trashView ? 'trash' : 'label'} />}
                             {emptyText[view.kind]}
                           </div>
                         )}

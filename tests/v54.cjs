@@ -47,7 +47,7 @@ const seed = (d) => new Promise((res) => {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   };
   await p.goto(URL); await p.waitForTimeout(600);
-  await p.evaluate(() => { localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off' })) });
+  await p.evaluate(() => { localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off' })) });
   await p.evaluate(seed, { yesterday: iso(-1) }); await p.reload(); await p.waitForTimeout(1000);
 
   // ---------- stacks + label colours ----------

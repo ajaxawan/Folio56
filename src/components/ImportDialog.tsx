@@ -2,7 +2,7 @@ import { BlockNoteView, darkDefaultTheme, lightDefaultTheme } from '@blocknote/m
 import { useCreateBlockNote } from '@blocknote/react'
 import '@blocknote/mantine/style.css'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, CheckCircle2, ClipboardPaste, Code2, FileText, FolderOpen, Image as ImageIcon, ListChecks, Table2, Tag, Upload, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ClipboardPaste, Code2, FileText, FolderOpen, Image as ImageIcon, ListChecks, Table2, BookOpen, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { dot, swatch } from '../lib/colors'
 import { db } from '../lib/db'
@@ -11,7 +11,7 @@ import { editorExtensions, normalizeCode, schema } from '../lib/editorSchema'
 import { usePrefs } from '../lib/prefs'
 import type { ColorKey, Note } from '../types'
 import { ColorPicker } from './ColorPicker'
-import { LabelPicker } from './LabelPicker'
+import { NotebookPicker } from './LabelPicker'
 import { IconButton, Popover, Segmented } from './ui'
 
 interface Raw { text: string; name: string; path: string }
@@ -140,9 +140,9 @@ export default function ImportDialog({ initialFiles, defaultLabelIds = [], onClo
               )}
               <div className="relative">
                 <button type="button" onClick={() => setMenu(menu === 'label' ? null : 'label')} className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 hover:bg-wash">
-                  <Tag size={13} /> {opts.labelIds.length ? labels.filter((l) => opts.labelIds.includes(l.id)).map((l) => l.name).join(', ') : 'Add label'}
+                  <BookOpen size={13} /> {opts.labelIds.length ? labels.filter((l) => opts.labelIds.includes(l.id)).map((l) => l.name).join(', ') : 'Choose a notebook'}
                 </button>
-                <Popover open={menu === 'label'} onClose={() => setMenu(null)} className="left-0 top-9"><LabelPicker title="Label imported notes" selected={opts.labelIds} onChange={(labelIds) => setOpts({ ...opts, labelIds })} /></Popover>
+                <Popover open={menu === 'label'} onClose={() => setMenu(null)} className="left-0 top-9"><NotebookPicker title="Put imported notes in" extras={false} selected={opts.labelIds} onChange={(labelIds) => setOpts({ ...opts, labelIds })} /></Popover>
               </div>
               <div className="relative">
                 <button type="button" onClick={() => setMenu(menu === 'color' ? null : 'color')} className="flex items-center gap-1.5 rounded-md border border-line px-2 py-1 hover:bg-wash">
@@ -187,7 +187,7 @@ export default function ImportDialog({ initialFiles, defaultLabelIds = [], onClo
             </div>
 
             <footer className="flex items-center gap-3 border-t border-line px-5 py-3">
-              <p className="flex-1 text-[12.5px] text-muted">{busy !== null ? `Importing ${busy} / ${chosen.length}…` : hasFolders && opts.keepFolders ? 'Folders inside the picked folder become pages that contain their notes.' : 'Tags in front matter become labels. Relative images from the folder are embedded.'}</p>
+              <p className="flex-1 text-[12.5px] text-muted">{busy !== null ? `Importing ${busy} / ${chosen.length}…` : hasFolders && opts.keepFolders ? 'Folders inside the picked folder become pages that contain their notes.' : 'Tags in front matter become notebooks. Relative images from the folder are embedded.'}</p>
               <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-[14px] hover:bg-wash">Cancel</button>
               <button type="button" disabled={!chosen.length || busy !== null} onClick={run} className="rounded-lg bg-accent px-4 py-2 text-[14px] font-medium text-on-accent disabled:opacity-50">
                 Import {chosen.length} {chosen.length === 1 ? 'note' : 'notes'}

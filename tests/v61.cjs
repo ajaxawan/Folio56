@@ -75,7 +75,7 @@ const dbNotes = (p) => p.evaluate(() => new Promise((res) => { const r = indexed
   const b = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium' })
   const errors = []
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block', acceptDownloads: true })
-  await ctx.addInitScript(() => { if (!sessionStorage.getItem('v61')) { sessionStorage.setItem('v61', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber', ai: false, name: 'Zain Iqbal' })); localStorage.setItem('folio.installHint', '1') } })
+  await ctx.addInitScript(() => { if (!sessionStorage.getItem('v61')) { sessionStorage.setItem('v61', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber', ai: false, name: 'Zain Iqbal' })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') } })
   const calls = await mockGroq(ctx)
   const p = await ctx.newPage()
   p.on('pageerror', (e) => errors.push(e.message))
@@ -249,7 +249,7 @@ const dbNotes = (p) => p.evaluate(() => new Promise((res) => { const r = indexed
   // ---------------- phone: the studio stacks
   {
     const c2 = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' })
-    await c2.addInitScript(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', mode: 'light', lightTheme: 'paper', ai: false })); localStorage.setItem('folio.installHint', '1') })
+    await c2.addInitScript(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', mode: 'light', lightTheme: 'paper', ai: false })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') })
     const q = await c2.newPage(); q.on('pageerror', (e) => errors.push('phone: ' + e.message))
     await q.goto(URL); await q.waitForTimeout(800); await q.evaluate(seed); await q.reload(); await q.waitForTimeout(1000)
     await q.getByRole('button', { name: 'Create' }).click(); await q.waitForTimeout(400)

@@ -33,7 +33,7 @@ const seed = ([yest, tomorrow, twoAgo]) => new Promise((res) => {
       { type: 'table', content: { type: 'tableContent', headerRows: 1, rows: [{ cells: [t('Panel'), t('Watts')] }, { cells: [t('A'), t('410')] }] } },
       { type: 'quote', content: t('Measure twice') },
     ])
-    mk('plan', 'Install plan', [{ type: 'paragraph', content: t('Two days on site.') }])
+    mk('plan', 'Install plan', [{ type: 'paragraph', content: t('Two days on site.') }], { kind: 'note' }) // 6.2: kept on the board on purpose (a page would live under Pages)
     mk('plan-a', 'Day one', [{ type: 'paragraph', content: t('Mounting rails.') }], { parentId: 'plan' })
     mk('tiny', 'Tiny', [])
     mk('day', 'Monday, 5 October 2026', [{ type: 'paragraph', content: t('Daily stuff') }], { daily: twoAgo, updatedAt: Date.now() })
@@ -48,7 +48,7 @@ const download = async (p, click, name) => { const [dl] = await Promise.all([p.w
   const b = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium' })
   const errors = []
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block', acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'] })
-  await ctx.addInitScript(() => { if (!sessionStorage.getItem('v60')) { sessionStorage.setItem('v60', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber', ai: false, name: 'Zain Iqbal' })); localStorage.setItem('folio.installHint', '1') } })
+  await ctx.addInitScript(() => { if (!sessionStorage.getItem('v60')) { sessionStorage.setItem('v60', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber', ai: false, name: 'Zain Iqbal' })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') } })
   const p = await ctx.newPage()
   p.on('pageerror', (e) => errors.push(e.message))
   await p.goto(URL); await p.waitForTimeout(800)
@@ -180,7 +180,7 @@ const download = async (p, click, name) => { const [dl] = await Promise.all([p.w
   await prev.getByRole('switch', { name: /today’s daily note/ }).click(); await p.waitForTimeout(300)
   ok('defaults are starred in the gallery', (await gal.locator('[aria-label="Default"]').count()) === 2)
   await gal.getByRole('button', { name: 'Close' }).click(); await p.waitForTimeout(300)
-  await side.getByRole('button', { name: 'New note' }).click(); await p.waitForTimeout(1200)
+  await side.getByRole('button', { name: 'New note', exact: true }).click(); await p.waitForTimeout(1200)
   ok('New note starts from the default template', await p.locator('.bn-editor').getByText('Why it matters').isVisible())
   await p.getByRole('button', { name: /^Back/ }).click(); await p.waitForTimeout(400)
   await side.getByRole('button', { name: /^Today/ }).click(); await p.waitForTimeout(1500)
@@ -271,7 +271,7 @@ const download = async (p, click, name) => { const [dl] = await Promise.all([p.w
   // ---------------- phone: the gallery as a sheet
   {
     const ctx2 = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' })
-    await ctx2.addInitScript(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', mode: 'light', lightTheme: 'paper', ai: false })); localStorage.setItem('folio.installHint', '1') })
+    await ctx2.addInitScript(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', mode: 'light', lightTheme: 'paper', ai: false })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') })
     const q = await ctx2.newPage(); q.on('pageerror', (e) => errors.push('phone: ' + e.message))
     await q.goto(URL); await q.waitForTimeout(1200)
     await q.getByRole('button', { name: 'Create' }).click(); await q.waitForTimeout(400)

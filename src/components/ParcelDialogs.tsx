@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { db } from '../lib/db'
 import { friendlyDate, senderName } from '../lib/device'
 import {
-  accept, collect, fromHash, isEncrypted, LINK_HARD_LIMIT, LINK_SOFT_LIMIT, NeedsCode, newCode, pack, preview, stripImages, toLink, unpack, WrongCode,
+  accept, collect, fromHash, isEncrypted, LINK_HARD_LIMIT, LINK_SOFT_LIMIT, NeedsCode, newCode, pack, preview, shrinkImages, stripImages, toLink, unpack, WrongCode,
   type Incoming, type ParcelContent,
 } from '../lib/parcel'
 import { closeParcel, useParcelRequest } from '../lib/parcelBus'
@@ -58,7 +58,8 @@ function SendDialog({ ids }: { ids: string[] | 'all' }) {
       const without = toLink(await pack({ ...content, notes: slim.notes }, activeCode), activeCode, codeInLink)
       let url = without, withImages = false
       if (slim.removed && images !== false) {
-        const full = toLink(await pack(content, activeCode), activeCode, codeInLink)
+        // pictures are redrawn smaller first, so many more links can keep them
+        const full = toLink(await pack({ ...content, notes: await shrinkImages(content.notes) }, activeCode), activeCode, codeInLink)
         // Automatic: keep images only while the link stays comfortably short.
         if (images === true || full.length <= LINK_SOFT_LIMIT) { url = full; withImages = true }
       }

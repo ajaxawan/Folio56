@@ -17,8 +17,12 @@ export interface Note {
   archived: boolean
   trashedAt: number | null
   parentId: string | null
+  /** Notebooks this note is in (stored as labels; the first is its home). */
   labels: string[]
   position: number
+  /** V6.2: a quick note (cards on the home screen) or a page (the Pages tree). Unset = worked out:
+   *  anything in a page tree (with a parent or pages inside) is a page. See lib/kinds.ts. */
+  kind?: 'note' | 'page'
   locked: boolean
   cipher: Cipher | null
   daily: string | null // YYYY-MM-DD for daily notes
@@ -70,6 +74,7 @@ export interface Memo {
   ravDismissed?: boolean
 }
 
+/** A notebook (called a label before 6.2). */
 export interface Label { id: string; name: string; color?: ColorKey }
 
 export type Paper = 'none' | 'grid' | 'dots' | 'lines'

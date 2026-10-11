@@ -31,7 +31,7 @@ const drop = (p, b64, name) => p.evaluate(([b64, name]) => {
   {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block', reducedMotion: 'reduce' }); const p = await ctx.newPage()
     p.on('pageerror', (e) => errors.push(e.message))
-    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', todayCollapsed: true })); localStorage.setItem('folio.installHint', '1') })
+    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', todayCollapsed: true })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') })
     await p.evaluate(seed, 300); await p.reload(); await p.locator('article').first().waitFor(); await p.waitForTimeout(1500)
 
     ok('top Notes/Pages/Tasks switch is hidden while the sidebar shows the same links', !(await p.locator('header').getByRole('button', { name: 'Pages', exact: true }).isVisible()))
@@ -81,7 +81,7 @@ const drop = (p, b64, name) => p.evaluate(([b64, name]) => {
   {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' }); const p = await ctx.newPage()
     p.on('pageerror', (e) => errors.push(e.message))
-    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off' })); localStorage.setItem('folio.installHint', '1') }); await p.reload(); await p.waitForTimeout(800)
+    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off' })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') }); await p.reload(); await p.waitForTimeout(800)
     const pdf = await makePdf(b, 30, 'Microsoft PowerPoint - Quarterly-Review-2026.pptx')
     await p.goto(URL + '/?view=margins'); await p.waitForTimeout(800)
     await drop(p, pdf, 'Quarterly-Review-2026.pdf'); await p.waitForTimeout(2500)

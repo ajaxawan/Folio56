@@ -4,24 +4,27 @@
 //
 // Binary layout (before base64url):  'F' | version | flags | [salt16 iv12] | payload
 //   flags bit0 = encrypted (AES-GCM, key from the parcel code via PBKDF2)
-//   payload    = deflate(JSON { v, from, at, notes, labels })
+//   payload    = v1: deflate(JSON { v, from, at, notes, labels })
+//                v2 (6.2): the same, with notes in a compact shape and a built-in deflate dictionary (parcelCodec.ts)
 
-import { deflateSync, inflateSync, strFromU8, strToU8 } from 'fflate'
+import { inflateSync, strFromU8 } from 'fflate'
 import { appUrl } from './paths'
 import type { Label, Note } from '../types'
 import { b64, openBytes, sealBytes, unb64 } from './crypto'
 import { db, descendants, revOf } from './db'
 import { externalize, inlineRefs, isData, isRef, storeDataUrl, toDataUrl, type StoredBlob } from './blobs'
+import { compress, decompress, fullNote, slimNote } from './parcelCodec'
+import { derive } from './preview'
 
 const MAGIC = 0x46
-const VERSION = 1
+const VERSION = 2
 export const LINK_KEY = 'p'
 /** Links longer than this get a warning — some chat apps truncate very long URLs. */
 export const LINK_SOFT_LIMIT = 8000
 /** Beyond this, most apps refuse or mangle the link. */
 export const LINK_HARD_LIMIT = 60_000
 
-export interface ParcelContent { v: 1; from: string; at: number; notes: Note[]; labels: Label[] }
+export interface ParcelContent { v: 1 | 2; from: string; at: number; notes: Note[]; labels: Label[] }
 
 // ---------- base64url ----------
 const toUrl = (s: string) => s.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -72,9 +75,34 @@ export function stripImages(notes: Note[]) {
   return { notes: out, removed }
 }
 
+/**
+ * Pictures make links long. Before they go in a link, each one is redrawn smaller (at most 720 px,
+ * WebP) — usually a tenth of the size. Returns the notes with smaller pictures.
+ */
+export async function shrinkImages(notes: Note[], max = 720, quality = 0.55): Promise<Note[]> {
+  const shrink = async (url: string) => {
+    if (!url.startsWith('data:image/') || url.length < 12_000) return url
+    try {
+      const img = new Image(); img.src = url; await img.decode()
+      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight))
+      const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k))
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+      const out = c.toDataURL('image/webp', quality)
+      return out.startsWith('data:image/webp') && out.length < url.length ? out : url
+    } catch { return url }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const walk = async (bs: any[]): Promise<any[]> => Promise.all((bs ?? []).map(async (b) => ({
+    ...b, props: b.type === 'image' && b.props?.url ? { ...b.props, url: await shrink(b.props.url) } : b.props,
+    children: b.children?.length ? await walk(b.children) : b.children,
+  })))
+  return Promise.all(notes.map(async (n) => ({ ...n, content: await walk(n.content ?? []), cover: n.cover ? await shrink(n.cover) : n.cover })))
+}
+
 // ---------- encode / decode ----------
 export async function pack(content: ParcelContent, code: string | null): Promise<Uint8Array> {
-  const payload = deflateSync(strToU8(JSON.stringify(content)), { level: 9 })
+  // V6.2: compact notes + dictionary deflate — links are 60–85% shorter than before
+  const payload = compress(JSON.stringify({ ...content, v: 2, notes: content.notes.map(slimNote) }))
   if (!code) return concat([Uint8Array.of(MAGIC, VERSION, 0), payload])
   const { salt, iv, data } = await sealBytes(payload, normCode(code))
   return concat([Uint8Array.of(MAGIC, VERSION, 1), salt, iv, data])
@@ -93,7 +121,12 @@ export async function unpack(bytes: Uint8Array, code?: string | null): Promise<P
     if (!code) throw new NeedsCode()
     try { payload = await openBytes(bytes.subarray(3, 19), bytes.subarray(19, 31), bytes.subarray(31), normCode(code)) } catch { throw new WrongCode() }
   }
-  const c = JSON.parse(strFromU8(inflateSync(payload))) as ParcelContent
+  // links made before 6.2 (format 1) still open
+  let c: ParcelContent
+  try {
+    if (bytes[1] >= 2) { const raw = JSON.parse(decompress(payload)); c = { ...raw, notes: (raw.notes ?? []).map((o: unknown) => fullNote(o, derive)) } }
+    else c = JSON.parse(strFromU8(inflateSync(payload))) as ParcelContent
+  } catch { throw new Error('This link is incomplete — ask for it again.') }
   if (!Array.isArray(c.notes)) throw new Error('This link is incomplete — ask for it again.')
   return c
 }

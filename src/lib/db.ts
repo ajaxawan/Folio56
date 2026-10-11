@@ -150,6 +150,12 @@ export async function addLabelToMany(ids: string[], labelId: string) {
   await db.notes.bulkUpdate(notes.filter(Boolean).map((n) => ({ key: n!.id, changes: { labels: Array.from(new Set([...n!.labels, labelId])) } })))
 }
 
+/** V6.2: move notes into a notebook (their other notebooks stay). */
+export async function moveToNotebook(ids: string[], labelId: string) {
+  const notes = await db.notes.bulkGet(ids)
+  await db.notes.bulkUpdate(notes.filter(Boolean).map((n) => ({ key: n!.id, changes: { labels: [labelId, ...n!.labels.slice(1).filter((x) => x !== labelId)] } })))
+}
+
 // ---------- ordering ----------
 /** Move `dragId` to sit just before `targetId` in a list sorted by position desc. */
 export async function moveBefore(list: Note[], dragId: string, targetId: string, pinned?: boolean) {

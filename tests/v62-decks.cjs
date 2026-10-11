@@ -108,7 +108,7 @@ const openMaker = async (p) => { await p.keyboard.press('Control+k'); await p.wa
   const errors = []
   const mk = async (script) => {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block', acceptDownloads: true })
-    await ctx.addInitScript(() => { if (!sessionStorage.getItem('v62d')) { sessionStorage.setItem('v62d', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber', ai: true, name: 'Zain Iqbal' })); localStorage.setItem('folio.installHint', '1') } })
+    await ctx.addInitScript(() => { if (!sessionStorage.getItem('v62d')) { sessionStorage.setItem('v62d', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber', ai: true, name: 'Zain Iqbal' })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') } })
     const calls = await mockGroq(ctx, script)
     const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
     await p.goto(APP); await p.waitForTimeout(900); await p.evaluate(seed, SOURCE); await p.reload(); await p.waitForTimeout(1200)

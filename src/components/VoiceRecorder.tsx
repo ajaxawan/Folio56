@@ -133,7 +133,7 @@ export function VoiceRecorder({ labelIds, onClose, onSaved, journal }: { labelId
         {state === 'idle' && (
           <>
             {journal && <p className="mt-4 max-w-xs text-center text-[14px] leading-6 text-ink-2">{ai ? 'Talk about your day. Folio writes it up in your own voice and adds it to today’s note — to-dos become tasks.' : 'Talk about your day. The recording is added to today’s note.'}</p>}
-            {!ai && !journal && <p className="mt-4 max-w-xs text-center text-[14px] leading-6 text-ink-2">The recording is saved as an audio note you can play back, title and label.</p>}
+            {!ai && !journal && <p className="mt-4 max-w-xs text-center text-[14px] leading-6 text-ink-2">The recording is saved as an audio note you can play back, title and put in a notebook.</p>}
             <div className={`mt-4 w-full max-w-sm space-y-1.5 ${journal || !ai ? 'hidden' : ''}`} role="radiogroup" aria-label="What to make from it">
               {STYLES.map((s) => (
                 <button key={s.value} type="button" role="radio" aria-checked={style === s.value} onClick={() => setStyle(s.value)}

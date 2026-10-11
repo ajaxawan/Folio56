@@ -24,6 +24,16 @@ Export a backup in Settings first, just in case. Drop the whole folder (not just
 
 Vercel only serves the app's static files; your notes never go to Vercel. After the first load, the app works fully offline.
 
+## New in 6.2 — Notes, pages and notebooks
+
+- **Notes and pages have their own homes.** The Notes board holds quick notes (ideas, lists, minutes). Pages — anything with pages inside, or anything you turn into a page — live under **Pages** (now pages only, still nested) and show as a **Recent pages** row on the board, so nothing feels lost.
+- **No migration.** Nothing in the database changes. A note is a page if it has pages inside or sits inside one, unless you choose otherwise: **⋯ → Turn into a page / Turn into a note** sets an optional `kind`. Daily notes and decks always stay what they are.
+- **Add a page inside** a note turns it into a page and says so. A RAV review of a quick note now sits *beside* it (same notebook, linked from the note) instead of turning the note into a page; reviews of pages still go inside.
+- **Labels are now notebooks** — same storage, same names and colours. A note lives in one notebook and can also be shown in others: tap a notebook to move it, **+ Also here** to add another, **No notebook** to take it out. Old notes with several labels keep them all (the first is home).
+- **A notebook page** shows its pages first, then its notes, with **New page** and **Import into notebook**. Select several → **Move to notebook**. Ctrl K: **New page**, **Open notebook: …**.
+- **A one-time card** tells people who had pages or labels what changed (“Got it” / “Show my pages”). New users learn it from the welcome guide instead.
+- Tests: `tests/v62-kinds.cjs` (35 checks).
+
 ## New in 6.2 — Welcome
 
 - **A welcome page at `/`, the app at `/app/`.** The welcome page (`index.html`, assets in `public/welcome/`) is plain HTML with no app code, so it opens instantly. Anyone who has used Folio56 in this browser — the app sets a flag, and older users are recognised by their notes — goes straight to `/app/`, as do installed apps and every old link (`/#p=…` share links, `/?new=…` shortcuts, the share target). `/welcome` always shows the page.
@@ -35,6 +45,7 @@ Vercel only serves the app's static files; your notes never go to Vercel. After 
 - **Presenter view** (press P while presenting): this slide, the next one, your notes, a timer and the clock. **Make it visual** turns a list slide into the best-fitting diagram. *From headings* (no AI) now spots numbered steps (→ process), dated lists (→ timeline) and adds an agenda when a note has three or more parts.
 - **RAV — Reason · Attack · Validate.** Put an idea, plan or decision through three passes from a note's ⋯ menu (or search): *Reason* — the claim, what it rests on and how it follows; *Attack* — the strongest objections, ranked; *Validate* — which assumptions the note really backs up, each with an exact quote that Folio56 checks on the device (a quote that isn't in the note doesn't count), and the cheapest real test for every one that isn't, with what counts as a pass and what kills the idea. The result is a page under the note (the note is never changed); the tests become dated tasks, and each objection can be marked valid, answered or not relevant. A note's pages are read with it — the project's own library. Written-up voice memos offer to test their ideas.
 - **Every free Groq model.** GPT-OSS 120B (best writing), **Qwen 3.8 27B** (preview — very fast, and it can see) and GPT-OSS 20B (fastest). Each has its own free per-minute allowance, so when one is busy the next one answers, and presentation slides are designed by all three side by side. Scanned PDFs (pictures of pages) are read by Qwen 3.8 for presentations. Old settings pointing at models Groq has retired (Llama, Kimi, Qwen 3) switch to GPT-OSS 120B. Settings → AI lists them, with a switch to keep to just one.
+- **Shorter share links.** Links now carry only what the other side can't work out (no block ids, default settings or card previews), in a compact shape, compressed from a built-in dictionary of common note words — typically 60–85% shorter (a meeting note: about 1,170 → 480 characters; a short list: about 240). Pictures are redrawn smaller (WebP, at most 720 px) so links can keep them far more often. Links made before 6.2 still open. Still no server: the notes travel inside the link.
 - **Readable dropdowns.** Dropdown lists now follow the theme; on Windows they could open white with near-white text.
 - **Fixes:** a checked checklist item that wraps onto two lines is now struck through on every line (it looked like an underline on cards, Today and Tasks). The “56” in the logo is readable on light themes.
 

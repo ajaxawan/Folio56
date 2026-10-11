@@ -40,7 +40,7 @@ const seed = (days) => new Promise((res) => {
   {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block', permissions: ['microphone'] }); const p = await ctx.newPage()
     p.on('pageerror', (e) => errors.push(e.message))
-    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber' })); localStorage.setItem('folio.installHint', '1') })
+    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber' })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') })
     await p.evaluate(seed, 5); await p.reload(); await p.waitForTimeout(1200)
     ok('new users start with AI off', await p.evaluate(() => JSON.parse(localStorage.getItem('folio.prefs')).ai === false))
     ok('a backup reminder appears once there are notes worth keeping', await p.getByText('Keep a copy of your notes.').isVisible())
@@ -95,7 +95,7 @@ const seed = (days) => new Promise((res) => {
   // ---------------- contrast in all 17 themes
   {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 860 }, serviceWorkers: 'block' }); const p = await ctx.newPage()
-    await p.goto(URL); await p.evaluate(() => localStorage.setItem('folio.installHint', '1')); await p.evaluate(seed, 1); await p.reload(); await p.waitForTimeout(800)
+    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') }); await p.evaluate(seed, 1); await p.reload(); await p.waitForTimeout(800)
     const dark = ['charcoal', 'graphite', 'espresso', 'ember', 'moss', 'arctic', 'tide', 'dusk', 'plum', 'midnight', 'oled'], light = ['paper', 'linen', 'blush', 'sage', 'mist', 'fog']
     const bad = []
     for (const th of [...dark, ...light]) {
@@ -113,7 +113,7 @@ const seed = (days) => new Promise((res) => {
   {
     const ctx = await b.newContext({ viewport: { width: 1600, height: 960 }, serviceWorkers: 'block' }); const p = await ctx.newPage()
     p.on('pageerror', (e) => errors.push(e.message))
-    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber', ai: false })); localStorage.setItem('folio.installHint', '1') })
+    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber', ai: false })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') })
     await p.evaluate(seed, 1); await p.reload(); await p.waitForTimeout(1000)
     // long note with headings
     await p.getByText('Take a note…').first().click(); await p.getByPlaceholder('Title').fill('Field guide'); await p.keyboard.press('Escape'); await p.waitForTimeout(400)

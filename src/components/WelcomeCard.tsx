@@ -1,4 +1,4 @@
-import { ArrowRight, ShieldCheck } from 'lucide-react'
+import { ArrowRight, BookMarked, FileText, ShieldCheck, StickyNote } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { usePrefs } from '../lib/prefs'
 import { addWelcomeNote, isWelcomed, markWelcomed } from '../lib/welcome'
@@ -28,10 +28,11 @@ export function WelcomeCard({ noteCount, loaded, onOpen }: { noteCount: number; 
     setBusy(true)
     if (name.trim() !== prefs.name) set({ name: name.trim() })
     const id = await addWelcomeNote()
+    markKindsSeen()
     setShow(false)
     onOpen(id)
   }
-  const skip = () => { markWelcomed(); setShow(false) }
+  const skip = () => { markWelcomed(); markKindsSeen(); setShow(false) }
   return (
     <section aria-labelledby="welcome-title" className="animate-pop relative mx-auto mb-4 mt-2 max-w-[640px] overflow-hidden rounded-3xl border border-line bg-[linear-gradient(160deg,color-mix(in_srgb,var(--color-accent)_14%,var(--color-card))_0%,var(--color-card)_55%)] p-6 shadow-[inset_0_1px_0_var(--color-highlight)] max-sm:p-5">
       <h2 id="welcome-title" className="font-title text-[28px] leading-tight text-ink max-sm:text-[24px]">Welcome to Folio56</h2>
@@ -54,6 +55,36 @@ export function WelcomeCard({ noteCount, loaded, onOpen }: { noteCount: number; 
         </div>
       </form>
       <p className="mt-5 flex items-center gap-2 border-t border-line pt-4 text-[12.5px] text-muted"><ShieldCheck size={15} className="shrink-0 text-accent" /> You’ll get a short guide note — keep it, or delete it when you’re done.</p>
+    </section>
+  )
+}
+
+// a per-browser hint, like the install hint (kept out of backups on purpose)
+const KEY = 'folio.kinds62'
+const markKindsSeen = () => { try { localStorage.setItem(KEY, '1') } catch { /* ignore */ } }
+const kindsSeen = () => { try { return !!localStorage.getItem(KEY) } catch { return true } }
+
+/**
+ * V6.2: shown once to people who used Folio56 before notes and pages were split, and only if they
+ * have pages or labels — so the move of their pages and the new name for labels never surprise them.
+ */
+export function KindsNews({ pages, notebooks, onPages }: { pages: number; notebooks: number; onPages: () => void }) {
+  const [seen, setSeen] = useState(kindsSeen)
+  if (seen || (!pages && !notebooks)) return null
+  const done = () => { markKindsSeen(); setSeen(true) }
+  return (
+    <section aria-labelledby="kinds-title" className="animate-pop mx-auto mb-4 mt-2 max-w-[720px] rounded-2xl border border-accent/30 bg-[color-mix(in_srgb,var(--color-accent)_8%,var(--color-card))] p-5 max-sm:p-4">
+      <h2 id="kinds-title" className="font-title text-[20px] text-ink">Notes, pages and notebooks</h2>
+      <p className="mt-1 text-[13.5px] text-muted">Nothing was moved out of your device or deleted — things just have clearer homes now.</p>
+      <ul className="mt-3 space-y-2 text-[14px] leading-6 text-ink-2">
+        <li className="flex gap-2.5"><StickyNote size={17} className="mt-[3px] shrink-0 text-accent" /><span><b className="text-ink">Notes</b> stay on this board — quick cards for ideas, lists and minutes.</span></li>
+        <li className="flex gap-2.5"><FileText size={17} className="mt-[3px] shrink-0 text-accent" /><span><b className="text-ink">Pages</b> — anything with pages inside — now live under <b className="text-ink">Pages</b>{pages ? ` (you have ${pages})` : ''}. Your latest ones show just below. Turn any note into a page, or back, from its ⋯ menu.</span></li>
+        {notebooks > 0 && <li className="flex gap-2.5"><BookMarked size={17} className="mt-[3px] shrink-0 text-accent" /><span><b className="text-ink">Labels are now notebooks.</b> Same names, same colours, same notes. A note can still be in more than one.</span></li>}
+      </ul>
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
+        {pages > 0 && <button type="button" onClick={() => { done(); onPages() }} className="rounded-lg px-3.5 py-2 text-[13.5px] text-ink-2 hover:bg-wash">Show my pages</button>}
+        <button type="button" onClick={done} className="rounded-lg bg-accent px-4 py-2 text-[13.5px] font-medium text-on-accent">Got it</button>
+      </div>
     </section>
   )
 }

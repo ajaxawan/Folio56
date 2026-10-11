@@ -19,7 +19,7 @@ const seedNotes = (p, notes) => p.evaluate((list) => new Promise((res) => {
     tx.oncomplete = () => res(1)
   }
 }), notes)
-const quiet = () => { try { localStorage.setItem('folio.installHint', '1') } catch { /* about:blank */ } }
+const quiet = () => { try { localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') } catch { /* about:blank */ } }
 
 ;(async () => {
   const b = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium' })

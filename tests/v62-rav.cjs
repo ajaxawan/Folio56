@@ -75,13 +75,13 @@ const dbNotes = (p) => p.evaluate(() => new Promise((res) => { const r = indexed
   const errors = []
   const mk = async ({ ai = true, opts = {}, seedOpts = {}, prefs = {} } = {}) => {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' })
-    await ctx.addInitScript((pr) => { if (!sessionStorage.getItem('rav')) { sessionStorage.setItem('rav', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber', name: 'Zain Iqbal', ...pr })); localStorage.setItem('folio.installHint', '1') } }, { ai, ...prefs })
+    await ctx.addInitScript((pr) => { if (!sessionStorage.getItem('rav')) { sessionStorage.setItem('rav', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', theme: 'espresso', accent: 'amber', name: 'Zain Iqbal', ...pr })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') } }, { ai, ...prefs })
     const calls = await mockGroq(ctx, opts)
     const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
     await p.goto(APP); await p.waitForTimeout(800); await p.evaluate(seed, { idea: IDEA, page: PAGE, ...seedOpts }); await p.reload(); await p.waitForTimeout(1200)
     return { ctx, p, calls }
   }
-  const openNote = async (p, title) => { await p.locator('article', { hasText: title }).first().click(); await p.locator('.bn-editor').waitFor(); await p.waitForTimeout(500) }
+  const openNote = async (p, title) => { const card = p.locator('article', { hasText: title }).first(); if (await card.count()) await card.click(); else await p.getByRole('region', { name: 'Recent pages' }).getByRole('button', { name: new RegExp(title) }).click(); await p.locator('.bn-editor').waitFor(); await p.waitForTimeout(500) }
   const more = async (p) => { await p.getByRole('button', { name: /^More/ }).first().click(); await p.waitForTimeout(250) }
 
   // ---------------- dropdown lists follow the theme
@@ -194,6 +194,11 @@ const dbNotes = (p) => p.evaluate(() => new Promise((res) => { const r = indexed
     ok('a retired model in old settings (Llama 3.3) is replaced by GPT-OSS 120B', c && c.model === 'openai/gpt-oss-120b')
     await p.getByRole('region', { name: 'RAV review' }).getByRole('button', { name: /Open “Chat about value”/ }).click(); await p.waitForTimeout(600)
     ok('once tested, the memo stops offering', !(await p.getByText(/Test the ideas in this recording/).count()))
+    const all = await dbNotes(p); const rv = all.find((x) => x.rav?.of === 'memo')
+    ok('6.2: a quick note’s review sits beside it (not inside), so the note stays a note', rv && rv.parentId === null && !all.some((x) => x.parentId === 'memo'))
+    ok('6.2: the note links to its review', await p.getByRole('button', { name: /RAV review ·/ }).isVisible())
+    await p.getByRole('button', { name: /^Back/ }).click(); await p.waitForTimeout(500)
+    ok('6.2: the memo is still on the Notes board', await p.locator('article', { hasText: 'Chat about value' }).count() > 0)
     await ctx.close()
   }
   {

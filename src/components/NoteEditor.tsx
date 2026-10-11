@@ -5,7 +5,7 @@ import '@blocknote/mantine/style.css'
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
   Archive, ArchiveRestore, ArrowLeft, Check, Compass, Link2, ListTree, Printer, ChevronRight, Copy, Download, FilePlus2, FileText, History, LayoutTemplate,
-  Image as ImageIcon, Layers, Presentation, Lock, LockOpen, Maximize2, MessageCircle, Mic, Smile, Sparkles, Grid3x3, Minimize2, MoreHorizontal, Palette, Pin, Plus, Send, Sun, Tag, Trash2, Type,
+  Image as ImageIcon, Layers, Presentation, Lock, LockOpen, Maximize2, MessageCircle, Mic, Smile, Sparkles, Grid3x3, Minimize2, MoreHorizontal, Palette, Pin, Plus, Send, Sun, BookOpen, FileText as PageIcon, StickyNote, Trash2, Type,
 } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { COVERS, EMOJI, surface, swatch } from '../lib/colors'
@@ -23,7 +23,7 @@ import { derive } from '../lib/preview'
 import type { Note, Version } from '../types'
 import { ColorPicker } from './ColorPicker'
 import { HistoryPanel } from './HistoryPanel'
-import { LabelPicker } from './LabelPicker'
+import { NotebookPicker } from './LabelPicker'
 import { PasscodeDialog } from './PasscodeDialog'
 import { IconButton, MenuItem, Popover, Segmented, Switch } from './ui'
 import { sendNotes } from '../lib/parcelBus'
@@ -40,6 +40,7 @@ import { shareableBlocks } from '../lib/message'
 import { formaliseText, isProcessing, processMemo } from '../lib/voice'
 import { SaveTemplateDialog, TemplateDraftBar } from './TemplateBits'
 import { toast } from '../lib/toast'
+import { isPage } from '../lib/kinds'
 const TemplateGallery = lazy(() => import('./TemplateGallery').then((m) => ({ default: m.TemplateGallery })))
 const ExportDialog = lazy(() => import('./ExportDialog').then((m) => ({ default: m.ExportDialog })))
 const DeckStudio = lazy(() => import('./DeckStudio').then((m) => ({ default: m.DeckStudio })))
@@ -163,6 +164,8 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
   const busy = !!note.memo && (note.memo.status === 'transcribing' || note.memo.status === 'writing') && isProcessing(note.id)
   // Only this page's sub-pages and its ancestors — not the whole library (matters with thousands of notes).
   const kids = useLiveQuery(() => db.notes.where('parentId').equals(note.id).toArray(), [note.id]) ?? []
+  // V6.2: reviews of a quick note sit beside it, so link to them from here.
+  const reviews = useLiveQuery(() => db.notes.filter((n) => n.rav?.of === note.id && n.parentId !== note.id && n.trashedAt === null).toArray(), [note.id]) ?? []
   const crumbs = useLiveQuery(async () => {
     const out: Note[] = []; let p = note.parentId; let guard = 0
     while (p && guard++ < 32) { const n = await db.notes.get(p); if (!n) break; out.unshift(n); p = n.parentId }
@@ -400,6 +403,19 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
   useEffect(() => { const t = titleRef.current; if (t) { t.style.height = '0px'; t.style.height = t.scrollHeight + 'px' } }, [title, prefs.font, prefs.width])
 
   const children = kids.filter((n) => n.trashedAt === null)
+  // V6.2: a page is long, nested writing (lives under Pages); a note is a quick card on the board.
+  const page = isPage(note, children.length > 0)
+  const canKind = !draft && !note.daily && !note.deck && !note.rav
+  const makePage = () => patchNote(note.id, { kind: 'page' })
+  const makeNote = async () => {
+    const wasParent = note.parentId
+    await patchNote(note.id, { kind: 'note', parentId: null })
+    toast(children.length ? `Moved to Notes — its ${children.length} ${children.length === 1 ? 'page stays' : 'pages stay'} under Pages` : 'Moved to Notes', () => patchNote(note.id, { kind: note.kind, parentId: wasParent }))
+  }
+  const addInside = async () => {
+    if (!page) { await makePage(); toast(`“${title.trim() || 'Untitled'}” is a page now — find it under Pages`) }
+    const n = await createNote({ parentId: note.id, color: note.color, templateDraft: draft, labels: note.labels.slice(0, 1) }); go(n.id)
+  }
   const noteLabels = labels.filter((l) => note.labels.includes(l.id))
   const s = surface(note.color, dark, prefs.cardStyle)
   const tint = note.color === 'default' ? 'transparent' : prefs.cardStyle === 'vivid' ? swatch(note.color, dark) : s.background
@@ -503,6 +519,9 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
               {ai && !note.locked && <MenuItem icon={<Sparkles size={15} />} onClick={() => { setMenu(null); setFormalise(true) }}>{note.memo?.transcript && note.memo.source !== 'text' ? 'Rewrite from recording…' : 'Formalise with AI…'}</MenuItem>}
               {!note.locked && <MenuItem icon={<MessageCircle size={15} />} onClick={() => { setMenu(null); setCopyMsg(true) }}>Copy as message…</MenuItem>}
               {!draft && <MenuItem icon={<Layers size={15} />} hint={note.series ?? undefined} onClick={() => { setMenu(null); setSeriesOpen(true) }}>{note.series ? 'Series' : 'Add to a series…'}</MenuItem>}
+              {canKind && (page
+                ? <MenuItem icon={<StickyNote size={15} />} onClick={() => { setMenu(null); makeNote() }}>Turn into a note</MenuItem>
+                : <MenuItem icon={<PageIcon size={15} />} onClick={() => { setMenu(null); makePage(); toast('Turned into a page — find it under Pages', () => patchNote(note.id, { kind: note.kind })) }}>Turn into a page</MenuItem>)}
               {!draft && <MenuItem icon={<Pin size={15} />} onClick={() => { setMenu(null); patchNote(note.id, { pinned: !note.pinned }) }}>{note.pinned ? 'Unpin' : 'Pin'}</MenuItem>}
               {!draft && <MenuItem icon={note.locked ? <LockOpen size={15} /> : <Lock size={15} />} onClick={toggleLock}>{note.locked ? 'Remove lock' : 'Lock with passcode'}</MenuItem>}
               {!draft && !note.locked && <MenuItem icon={<LayoutTemplate size={15} />} onClick={async () => { setMenu(null); await persist({ title: title.trim() }); setSaveTpl(true) }}>Save as template…</MenuItem>}
@@ -584,6 +603,7 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
               <div className={`mt-3 flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted ${focus ? 'opacity-0' : ''}`}>
                 {note.daily && <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-amber-600 dark:text-star"><Sun size={12} /> Daily note</span>}
                 {note.locked && <span className="inline-flex items-center gap-1 rounded-full bg-wash px-2.5 py-1"><Lock size={12} /> Encrypted</span>}
+                {page && canKind && <span className="inline-flex items-center gap-1 rounded-full bg-wash px-2.5 py-1" title="Pages live under Pages and can hold pages inside"><PageIcon size={12} /> Page</span>}
                 <div className="relative">
                   <button type="button" onClick={() => setMenu(menu === 'color' ? null : 'color')} className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 hover:bg-wash">
                     <span className="h-3 w-3 rounded-full border border-line" style={{ background: swatch(note.color, dark) }} /> <Palette size={12} className="hidden" />Colour
@@ -593,15 +613,15 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
                 {noteLabels.map((l) => <span key={l.id} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-ink-2" style={{ background: `color-mix(in srgb, ${labelColor(l)} 16%, transparent)` }}><span className="h-1.5 w-1.5 rounded-full" style={{ background: labelColor(l) }} />{l.name}</span>)}
                 <div className="relative">
                   <button type="button" onClick={() => setMenu(menu === 'labels' ? null : 'labels')} className="inline-flex items-center gap-1 rounded-full px-2 py-1 hover:bg-wash">
-                    <Tag size={12} /> {noteLabels.length ? 'Edit' : 'Add label'}
+                    <BookOpen size={12} /> {noteLabels.length ? 'Move' : 'Add to a notebook'}
                   </button>
-                  <Popover open={menu === 'labels'} onClose={() => setMenu(null)} className="left-0 top-8"><LabelPicker selected={note.labels} onChange={(ids) => patchNote(note.id, { labels: ids })} /></Popover>
+                  <Popover open={menu === 'labels'} onClose={() => setMenu(null)} className="left-0 top-8"><NotebookPicker selected={note.labels} onChange={(ids) => patchNote(note.id, { labels: ids })} /></Popover>
                 </div>
                 <span className="px-2 py-1 text-faint">Created {new Date(note.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</span>
               </div>
             </div>
 
-            <div className="mt-5"><MemoBanner note={note} />{note.rav && <RavBanner note={note} onOpen={go} />}{ai && <RavOffer note={note} onRun={async () => { await persist({ title: title.trim() }); setRavOpen(true) }} />}</div>
+            <div className="mt-5"><MemoBanner note={note} />{note.rav && <RavBanner note={note} onOpen={go} />}{reviews.length > 0 && <div className="no-print mb-3 flex flex-wrap gap-1.5 px-[26px] sm:px-[54px]">{reviews.map((r) => <button key={r.id} type="button" onClick={() => go(r.id)} className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-[12.5px] text-ink-2 hover:border-accent/50"><Compass size={13} className="text-accent" /> RAV review · {new Date(r.rav!.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</button>)}</div>}{ai && <RavOffer note={note} onRun={async () => { await persist({ title: title.trim() }); setRavOpen(true) }} />}</div>
             <div className={`min-h-[40vh] ${busy ? 'pointer-events-none opacity-60' : ''}`} onFocus={() => setEdFocus(true)} onBlur={() => setEdFocus(false)}>
               <BlockNoteView editor={editor} theme={theme} onChange={onChange} editable={!busy} slashMenu={false}>
                 <SuggestionMenuController triggerCharacter="[[" getItems={linkItems} />
@@ -631,7 +651,7 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
                   {ch.locked && <Lock size={12} className="text-muted" />}
                 </button>
               ))}
-              <button type="button" onClick={async () => { const n = await createNote({ parentId: note.id, color: note.color, templateDraft: draft }); go(n.id) }}
+              <button type="button" onClick={addInside}
                 className="mt-1 flex items-center gap-2 rounded-lg px-2 py-2 text-[14px] text-muted hover:bg-wash hover:text-ink">
                 <FilePlus2 size={17} /> Add a page inside
               </button>

@@ -27,7 +27,7 @@ const select = (p, page, needle) => p.evaluate(([page, needle]) => {
   {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' }); const p = await ctx.newPage()
     p.on('pageerror', (e) => errors.push(e.message))
-    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', grain: false })); localStorage.setItem('folio.installHint', '1') }); await p.reload(); await p.waitForTimeout(900)
+    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', grain: false })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') }); await p.reload(); await p.waitForTimeout(900)
 
     await p.getByRole('button', { name: 'Margins' }).first().click(); await p.waitForTimeout(900)
     ok('Margins home shows an Open a PDF button', await p.getByRole('button', { name: 'Open a PDF' }).isVisible())
@@ -93,7 +93,7 @@ const select = (p, page, needle) => p.evaluate(([page, needle]) => {
   // tables
   {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' }); const p = await ctx.newPage()
-    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off' })); localStorage.setItem('folio.installHint', '1') }); await p.reload(); await p.waitForTimeout(900)
+    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off' })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') }); await p.reload(); await p.waitForTimeout(900)
     await p.getByText('Take a note…').first().click(); await p.getByPlaceholder('Title').fill('Table page'); await p.keyboard.press('Escape'); await p.waitForTimeout(400)
     await p.locator('article').first().click(); await p.waitForTimeout(900)
     await p.locator('.bn-editor').click(); await p.keyboard.type('/table', { delay: 20 }); await p.waitForTimeout(400); await p.keyboard.press('Enter'); await p.waitForTimeout(500)
@@ -105,7 +105,7 @@ const select = (p, page, needle) => p.evaluate(([page, needle]) => {
   // phone
   {
     const ctx = await b.newContext({ ...devices['iPhone 14 Pro'], serviceWorkers: 'block' }); const p = await ctx.newPage()
-    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off' })); localStorage.setItem('folio.installHint', '1') }); await p.reload(); await p.waitForTimeout(900)
+    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off' })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') }); await p.reload(); await p.waitForTimeout(900)
     await p.goto(URL + '/?view=margins'); await p.waitForTimeout(1200)
     ok('phone: ?view=margins opens Margins', await p.getByRole('button', { name: 'Open a PDF' }).isVisible())
     await drop(p); await p.waitForTimeout(2500)
@@ -118,7 +118,7 @@ const select = (p, page, needle) => p.evaluate(([page, needle]) => {
   // light mode contrast in Margins home
   {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' }); const p = await ctx.newPage()
-    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', mode: 'light', lightTheme: 'paper' })); localStorage.setItem('folio.installHint', '1') }); await p.reload(); await p.waitForTimeout(900)
+    await p.goto(URL); await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', mode: 'light', lightTheme: 'paper' })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') }); await p.reload(); await p.waitForTimeout(900)
     await p.goto(URL + '/?view=margins'); await p.waitForTimeout(1200)
     await p.addScriptTag({ content: AXE })
     const v = await p.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map((x) => `${x.id}(${x.nodes.length})`))

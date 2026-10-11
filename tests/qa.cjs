@@ -30,7 +30,7 @@ async function ctx(opts = {}) {
   p.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(`[${opts.tag ?? 'page'}] console: ${m.text().slice(0, 200)}`); });
   p.on('request', (r) => { const u = r.url(); if (!u.startsWith(URL) && !u.startsWith('data:') && !u.startsWith('blob:')) external.add(u.split('?')[0]); });
   await p.goto(URL);
-  await p.evaluate(() => localStorage.setItem('folio.prefs', JSON.stringify({ name: 'QA', candlelight: 'off' })));
+  await p.evaluate(() => { localStorage.setItem('folio.prefs', JSON.stringify({ name: 'QA', candlelight: 'off' })); localStorage.setItem('folio.kinds62', '1') });
   await p.reload(); await p.waitForTimeout(700);
   return { c, p };
 }
@@ -143,8 +143,8 @@ async function openNote(p, title) { await p.locator('article', { hasText: title 
 
   await check('labels: create, assign, filter, rename, delete', p, async () => {
     const card = p.locator('article', { hasText: 'QA first note edited' }).first();
-    await card.hover(); await card.getByRole('button', { name: 'Labels' }).click();
-    await p.getByPlaceholder('Search or create label').fill('Work'); await p.keyboard.press('Enter'); await p.waitForTimeout(300); await p.keyboard.press('Escape');
+    await card.hover(); await card.getByRole('button', { name: 'Notebook' }).click();
+    await p.getByPlaceholder('Find or create a notebook').fill('Work'); await p.keyboard.press('Enter'); await p.waitForTimeout(300); await p.keyboard.press('Escape');
     const lab = (await dbAll(p, 'labels')).find((l) => l.name === 'Work'); expect(lab, 'label not created');
     expect((await noteByTitle(p, 'QA first note edited')).labels.includes(lab.id), 'not assigned');
     await p.locator('aside button[title="Work"]').click(); await p.waitForTimeout(500);

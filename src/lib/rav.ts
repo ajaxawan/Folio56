@@ -100,9 +100,15 @@ export async function runRav(noteId: string, opts: { withPages: boolean }, progr
   })
   const r = checkQuotes(clean(data), src.text)
   progress('Writing the page…')
-  const { createNote } = await import('./db')
+  const { createNote, db } = await import('./db')
+  const { isPage } = await import('./kinds')
   const meta: RavMeta = { of: noteId, at: Date.now(), model, verdict: r.verdict, attacks: r.attacks, marks: {}, truncated: src.truncated }
-  const n = await createNote({ title: `RAV — ${src.title}`, parentId: noteId, icon: '🧭', content: ravBlocks(r, meta) as never, rav: meta })
+  // V6.2: a page gets its review as a page inside it; a quick note gets it as a note beside it
+  // (in the same notebook), so the note doesn't turn into a page behind your back.
+  const source = await db.notes.get(noteId)
+  const hasKids = (await db.notes.where('parentId').equals(noteId).filter((k) => k.trashedAt === null).count()) > 0
+  const inside = !source || isPage(source, hasKids)
+  const n = await createNote({ title: `RAV — ${src.title}`, parentId: inside ? noteId : null, labels: inside ? [] : source.labels.slice(0, 1), icon: '🧭', content: ravBlocks(r, meta) as never, rav: meta })
   return n.id
 }
 

@@ -65,12 +65,12 @@ export function Sidebar({ view, setView, labels, labelCounts, recents, openTasks
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         <div className="mt-5 flex items-center justify-between px-2.5 pb-1">
-          <span className="text-[12px] font-medium text-muted">Labels</span>
-          <button type="button" onClick={() => setEditing(!editing)} title="New label" aria-label="New label" className="rounded p-1 text-muted hover:text-accent"><Plus size={15} /></button>
+          <span className="text-[12px] font-medium text-muted">Notebooks</span>
+          <button type="button" onClick={() => setEditing(!editing)} title="New notebook" aria-label="New notebook" className="rounded p-1 text-muted hover:text-accent"><Plus size={15} /></button>
         </div>
         {editing && (
           <form onSubmit={async (e) => { e.preventDefault(); if (newLabel.trim()) { const l = await createLabel(newLabel); setNewLabel(''); setEditing(false); setView({ kind: 'label', labelId: l.id }) } }} className="px-1 pb-1">
-            <input autoFocus value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onBlur={() => !newLabel && setEditing(false)} placeholder="New label name, Enter to add"
+            <input autoFocus value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onBlur={() => !newLabel && setEditing(false)} placeholder="Notebook name, Enter to add" aria-label="Notebook name"
               onKeyDown={(e) => { if (e.key === 'Escape') { setNewLabel(''); setEditing(false) } }}
               className="w-full rounded-lg border border-accent/60 bg-canvas px-2.5 py-1.5 text-[13px] outline-none placeholder:text-faint" />
           </form>
@@ -81,7 +81,7 @@ export function Sidebar({ view, setView, labels, labelCounts, recents, openTasks
             <div key={l.id} className="group relative">
               <button type="button" onClick={() => setView({ kind: 'label', labelId: l.id })} title={l.name}
                 className={`relative flex w-full items-center gap-3 rounded-lg py-1.5 pl-3 pr-9 text-left text-[13.5px] transition-colors ${active ? 'bg-[color-mix(in_srgb,var(--color-accent)_14%,transparent)] font-medium text-ink' : 'text-ink-2 hover:bg-wash hover:text-ink'}`}>
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: labelColor(l) }} />
+                <span className="h-3 w-2.5 shrink-0 rounded-[3px]" style={{ background: labelColor(l) }} />
                 <span className="min-w-0 flex-1 truncate">{l.name}</span>
                 <span className="text-[11px] text-faint group-hover:opacity-0">{labelCounts[l.id] ?? 0}</span>
               </button>
@@ -93,7 +93,7 @@ export function Sidebar({ view, setView, labels, labelCounts, recents, openTasks
             </div>
           )
         })}
-        {!labels.length && !editing && <button type="button" onClick={() => setEditing(true)} className="px-2.5 py-1 text-left text-[13px] text-faint hover:text-accent">+ Add your first label</button>}
+        {!labels.length && !editing && <button type="button" onClick={() => setEditing(true)} className="px-2.5 py-1 text-left text-[13px] text-faint hover:text-accent">+ New notebook</button>}
 
         {recents.length > 0 && (
           <>

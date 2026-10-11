@@ -41,7 +41,7 @@ const check = (p) => p.evaluate(() => {
   for (const [w, h] of [[1024, 768], [1280, 800], [1440, 900], [390, 844]]) {
     const phone = w < 500
     const ctx = await b.newContext({ viewport: { width: w, height: h }, serviceWorkers: 'block', isMobile: phone, hasTouch: phone })
-    await ctx.addInitScript(() => { if (!sessionStorage.getItem('s')) { sessionStorage.setItem('s', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', ai: false, name: 'Zain Iqbal' })); localStorage.setItem('folio.installHint', '1') } })
+    await ctx.addInitScript(() => { if (!sessionStorage.getItem('s')) { sessionStorage.setItem('s', '1'); localStorage.setItem('folio.prefs', JSON.stringify({ candlelight: 'off', ai: false, name: 'Zain Iqbal' })); localStorage.setItem('folio.installHint', '1'); localStorage.setItem('folio.kinds62', '1') } })
     const p = await ctx.newPage(); await p.goto(URL); await p.waitForTimeout(700); await p.evaluate(seed); await p.reload(); await p.waitForTimeout(1200)
     const snap = async (name) => { await p.waitForTimeout(450); await p.screenshot({ path: path.join(OUT, `${w}-${name}.png`) }); const r = await check(p); console.log(`${w} ${name}: ${r.wide ? 'SIDEWAYS SCROLL ' : ''}${r.bad.length ? r.bad.join(' | ') : 'ok'}`) }
     const back = async () => { await p.getByRole('button', { name: /^Back/ }).first().click(); await p.waitForTimeout(400) }

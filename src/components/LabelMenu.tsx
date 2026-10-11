@@ -5,7 +5,7 @@ import { db, deleteLabel } from '../lib/db'
 import type { Label } from '../types'
 import { MenuItem, Popover } from './ui'
 
-/** Rename / colour / delete for one label. Used in the sidebar and on the label page. */
+/** Rename / colour / delete for one notebook (stored as a label). Used in the sidebar and on the label page. */
 export function LabelMenu({ label, open, onClose, onDeleted, className = '' }: { label: Label; open: boolean; onClose: () => void; onDeleted?: () => void; className?: string }) {
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(label.name)
@@ -34,14 +34,14 @@ export function LabelMenu({ label, open, onClose, onDeleted, className = '' }: {
       <div className="my-1 h-px bg-line" />
       {confirm ? (
         <div className="p-2 text-[12.5px]">
-          <p className="mb-2 text-muted">Delete "{label.name}"? Notes stay; only the label is removed.</p>
+          <p className="mb-2 text-muted">Delete "{label.name}"? Its notes and pages stay; they just leave this notebook.</p>
           <div className="flex gap-1.5">
             <button type="button" onClick={() => setConfirm(false)} className="flex-1 rounded-md bg-wash py-1.5 hover:bg-wash-2">Cancel</button>
             <button type="button" onClick={async () => { await deleteLabel(label.id); close(); onDeleted?.() }} className="flex-1 rounded-md bg-red-500/80 py-1.5 text-white hover:bg-red-500">Delete</button>
           </div>
         </div>
       ) : (
-        <MenuItem danger icon={<Trash2 size={15} />} onClick={() => setConfirm(true)}>Delete label</MenuItem>
+        <MenuItem danger icon={<Trash2 size={15} />} onClick={() => setConfirm(true)}>Delete notebook</MenuItem>
       )}
     </Popover>
   )

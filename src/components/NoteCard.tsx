@@ -1,6 +1,6 @@
 import { SlideView } from './SlideView'
 import { metaFor, themeOf } from '../lib/deckRender'
-import { Archive, ArchiveRestore, Check, Table2, CheckSquare, Copy, FileText, Lock, MoreHorizontal, Palette, Pin, RotateCcw, Send, Square, Sun, Tag, Trash2, Mic, Star, Layers, ChevronRight, Presentation } from 'lucide-react'
+import { Archive, ArchiveRestore, Check, Table2, CheckSquare, Copy, FileText, Lock, MoreHorizontal, Palette, Pin, RotateCcw, Send, Square, Sun, BookOpen, Trash2, Mic, Star, Layers, ChevronRight, Presentation } from 'lucide-react'
 import { memo, useRef, useState } from 'react'
 import { toast } from '../lib/toast'
 import { surface } from '../lib/colors'
@@ -13,7 +13,7 @@ import { toggleChecklistItem } from '../lib/preview'
 import { dueState, friendlyDue, parseTask } from '../lib/tasks'
 import type { Label, Note } from '../types'
 import { ColorPicker } from './ColorPicker'
-import { LabelPicker } from './LabelPicker'
+import { NotebookPicker } from './LabelPicker'
 import { MenuItem, Popover } from './ui'
 import { sendNotes } from '../lib/parcelBus'
 
@@ -285,8 +285,8 @@ export const NoteCard = memo(function NoteCard({ note, labels, childCount, selec
                 <Popover open={menu === 'color'} onClose={() => setMenu(null)} className="bottom-9 right-0"><ColorPicker value={note.color} onChange={(color) => patchNote(note.id, { color })} /></Popover>
               </div>
               <div className="relative">
-                <PillBtn label="Labels" onClick={() => setMenu(menu === 'labels' ? null : 'labels')}><Tag size={15} /></PillBtn>
-                <Popover open={menu === 'labels'} onClose={() => setMenu(null)} className="bottom-9 right-0"><LabelPicker selected={note.labels} onChange={(ids) => patchNote(note.id, { labels: ids })} /></Popover>
+                <PillBtn label="Notebook" onClick={() => setMenu(menu === 'labels' ? null : 'labels')}><BookOpen size={15} /></PillBtn>
+                <Popover open={menu === 'labels'} onClose={() => setMenu(null)} className="bottom-9 right-0"><NotebookPicker selected={note.labels} onChange={(ids) => patchNote(note.id, { labels: ids })} /></Popover>
               </div>
               <PillBtn label={note.archived ? 'Unarchive' : 'Archive'} onClick={() => patchNote(note.id, { archived: !note.archived, pinned: false })}>
                 {note.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
