@@ -8,7 +8,8 @@ import {
   type Incoming, type ParcelContent,
 } from '../lib/parcel'
 import { closeParcel, useParcelRequest } from '../lib/parcelBus'
-import { Modal, Segmented, Switch } from './ui'
+import { openSync } from '../lib/syncBus'
+import { DoneMark, Modal, Segmented, Switch } from './ui'
 
 /** Pictures ride along in a beam while it stays under about 100 codes. */
 const BEAM_IMAGES_MAX = 24_000
@@ -240,7 +241,7 @@ function ReceiveDialog({ link, scan: startScan, onOpenNote }: { link?: string; s
     <Modal title={<span className="flex items-center gap-2">{scanning && !bytes ? <QrCode size={18} /> : <Link2 size={18} />} {done ? 'Added to Folio' : scanning && !bytes ? 'Receive with Beam' : 'Open a shared link'}</span>} onClose={closeParcel}>
       {done ? (
         <div className="space-y-4 text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent text-on-accent"><Check size={28} strokeWidth={3} /></div>
+          <DoneMark size={56} className="mx-auto" />
           <p className="text-[15px]">{done.added > 0 && `${done.added} added`}{done.added > 0 && done.updated > 0 && ' · '}{done.updated > 0 && `${done.updated} updated`}{!done.added && !done.updated && 'Nothing imported'}</p>
           <div className="flex gap-2">
             {done.first && <button type="button" className={primary} onClick={() => { closeParcel(); onOpenNote(done.first!) }}>Open note</button>}
@@ -249,7 +250,7 @@ function ReceiveDialog({ link, scan: startScan, onOpenNote }: { link?: string; s
         </div>
       ) : !bytes && scanning ? (
         <div className="space-y-3">
-          <BeamScanner onResult={(r) => { setScanning(false); if ('bytes' in r) start(r.bytes, null); else { setPasted(r.link); openPasted(r.link) } }} />
+          <BeamScanner onResult={(r) => { setScanning(false); if ('bytes' in r) { if (r.bytes[0] === 0x59 || r.bytes[0] === 0x53) { closeParcel(); openSync({ bytes: r.bytes }) } else start(r.bytes, null) } else { setPasted(r.link); openPasted(r.link) } }} />
           <button type="button" className={secondary + ' w-full'} onClick={() => setScanning(false)}><Link2 size={15} /> Paste a link instead</button>
         </div>
       ) : !bytes ? (

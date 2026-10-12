@@ -27,7 +27,7 @@ const codeSize = () => Math.min(360, Math.max(220, window.innerWidth - 56))
 
 // ---------------------------------------------------------------- sending
 
-export function BeamSend({ bytes, link }: { bytes: Uint8Array | null; link: string | null }) {
+export function BeamSend({ bytes, link, hint }: { bytes: Uint8Array | null; link: string | null; hint?: string }) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const single = !!link && link.length <= SINGLE_QR_MAX
   const sender = useMemo(() => { try { return bytes && !single ? beamSender(bytes) : null } catch { return null } }, [bytes, single])
@@ -62,14 +62,15 @@ export function BeamSend({ bytes, link }: { bytes: Uint8Array | null; link: stri
       ) : sender && (
         <>
           <p className="text-center text-[13px] leading-5 text-muted">
-            On the other device, open Folio56 and choose <b className="text-ink">Receive with Beam</b> (search, or the + menu on a phone). Point its camera here and hold still.
+            {hint ?? <>On the other device, open Folio56 and choose <b className="text-ink">Receive with Beam</b> (search, or the + menu on a phone). Point its camera here and hold still.</>}
           </p>
-          <div className="flex items-center gap-2">
+          {sender.n > 3 && <><div className="flex items-center gap-2">
             <div className="w-44"><Segmented value={speed} onChange={setSpeed} options={[{ value: 'steady', label: 'Steady' }, { value: 'fast', label: 'Fast' }]} /></div>
             <button type="button" onClick={() => setPaused(!paused)} aria-label={paused ? 'Play' : 'Pause'} className="rounded-lg bg-wash p-2 hover:bg-wash-2">{paused ? <Play size={15} /> : <Pause size={15} />}</button>
             <span className="ml-auto text-right text-[12px] tabular-nums text-faint">{sender.n} {sender.n === 1 ? 'code' : 'codes'} · about {seconds}s</span>
           </div>
           <p className="text-[12px] leading-[1.5] text-faint">Nothing is sent over the internet — the codes carry the notes. Missed a few? Keep pointing; any later code fills the gap.</p>
+          </>}
         </>
       )}
     </div>
@@ -169,7 +170,7 @@ export function BeamScanner({ onResult }: { onResult: (r: BeamResult) => void })
       <div role="status" aria-live="polite" className="space-y-1.5">
         {prog && !prog.done ? (
           <>
-            <div className="h-1.5 overflow-hidden rounded-full bg-wash"><div className="h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: `${pct}%` }} /></div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-wash"><div className="beam-fill h-full w-full origin-left rounded-full bg-accent" style={{ transform: `scaleX(${pct / 100})` }} /></div>
             <p className="text-center text-[13px] tabular-nums text-ink-2">Receiving · {prog.have} of {prog.n} · {pct}%</p>
           </>
         ) : (hint || state !== 'nocam') && (

@@ -1,4 +1,4 @@
-# Folio56 — 6.3 (web app)
+# Folio56 — 6.4 (web app)
 
 Private, offline notes: Google Keep outside, Notion inside.
 Everything is stored in the browser on each device (IndexedDB). No accounts, no server, no cloud database.
@@ -23,6 +23,26 @@ Export a backup in Settings first, just in case. Drop the whole folder (not just
 3. Open the URL on the laptop (Chrome/Edge → Install app) and on the Tab A9 (Chrome → ⋮ → Add to Home screen / Install).
 
 Vercel only serves the app's static files; your notes never go to Vercel. After the first load, the app works fully offline.
+
+## New in 6.4 — Sync my devices
+
+- **Sync two of your own devices, with no account and no server.** Settings → **Sync my devices** (or Ctrl K). Tap **Start** on one device, **Join** on the other and point its camera at the code; then point the first device's camera at the code that appears. The devices connect directly over your Wi-Fi (WebRTC data channel, no STUN/TURN server — local network only) and swap what changed, both ways at once. **Receive** also understands sync codes, so the phone's + menu works for joining.
+- **Only changes travel.** Every edit stamps a note's `rev`. For each device it has synced with, Folio remembers up to when the other side confirmed receiving (`since`), and sends only notes changed after that. The first sync between two devices sends everything.
+- **Merging, note by note:** new → added; unchanged here since the last sync → replaced; changed on both devices (or different on a first sync) → the newer edit keeps the note and the other version is kept beside it as "Title (Device version)". Both devices make the same choice and the copy gets the same id on both (a hash of the note id and the losing edit), so they agree after one sync and nothing is doubled. Trash travels like any other change; nothing is ever deleted for good. Notebooks are matched by id, then name. Locked notes and template drafts stay put.
+- **Pictures and recordings follow by id** over Wi-Fi: after merging, each device asks for any file its notes use that it doesn't have (this also heals pictures missed by an earlier code-only sync).
+- **No shared Wi-Fi? Sync with codes.** The changes play as Folio Beam codes; the other device scans them with Receive, merges, and offers **Send my changes back** (without echoing what it just got). The reply confirms receipt, so the next sync sends only new changes. Small pictures ride along; larger ones come with the next Wi-Fi sync.
+- **If the devices can't reach each other** (different networks, or a router that keeps devices apart), Folio says so and offers codes instead.
+- **Mentioned in · not linked.** Under a note, other notes that name it without linking to it, with a snippet; **Link** turns the first mention into a real link (undo in the toast).
+- Code: `src/lib/sync.ts` (bundles, merging, devices), `src/lib/syncLink.ts` (handshake over QR, the channel protocol), `src/components/SyncDialog.tsx`, `src/lib/mentions.ts`. Tests: `tests/v64.cjs` (29 checks: two simulated devices with cameras filming each other's screens, Wi-Fi and code-only syncs, conflicts, pictures, a failed connection, mentions).
+
+### Motion (6.4)
+
+- **One motion system** (`src/lib/motion.ts`, the "V6.4 motion system" block in `index.css`): shared durations (`--d1`…`--d4`), an ease-out curve and a gentle spring (CSS `linear()` sampled from a damped spring; plain ease-out where `linear()` isn't supported). Only `transform` and `opacity` animate (plus a clip for the theme reveal), so it stays smooth on slower phones.
+- **Settings → Motion: Calm** (default) · **Lively** (a little more spring and travel) · **Still** (nothing animates or transitions). When the device asks to reduce motion, Folio starts Still, and says so in Settings; you can still choose otherwise. Also in Ctrl K ("Motion: …"). `<html data-motion>` carries the level.
+- **The bigger moments:** cards glide to their new places when they're pinned, sorted, dragged or added (FLIP, across columns and sections; old positions are read only when the order changes, never while typing; off above 80 cards); a card you archive or trash flies to Archive/Trash in the sidebar (sinks away on phones); a theme you tap spreads out from the tap (view transition with a circular reveal); views slide the way you went down or up the sidebar; "done" ticks draw themselves (sync, receiving, import).
+- **The small ones:** dialogs grow out of the button you pressed and leave with a short fade; on phones, sheets and menus follow your finger — pull far or flick to close, let go early and they spring back; toasts settle in and slip away; buttons give a little when pressed; segmented controls slide their pill; switches glide; progress bars fill with transforms.
+- **Comfort rules:** nothing moves while you type; entrances are staggered only for the first dozen cards, once; long jumps (off screen) don't glide; "unlinked mentions" are found in idle moments so opening a note never waits.
+- Tests: `tests/v64-motion.cjs` (26 checks).
 
 ## New in 6.3
 

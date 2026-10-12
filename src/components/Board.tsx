@@ -1,7 +1,7 @@
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, type PointerSensorOptions, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
-import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { moveBefore } from '../lib/db'
+import { flipFrom } from '../lib/motion'
 import { usePrefs } from '../lib/prefs'
 import type { Label, Note } from '../types'
 import { NoteCard } from './NoteCard'
@@ -39,9 +39,32 @@ export function Board({ groups, labels, childCount, selected, onOpen, onSelect, 
     useSensor(TouchSensor, { activationConstraint: { delay: 350, tolerance: 8 } }),
   )
   const all = useMemo(() => groups.flatMap((g) => g.notes), [groups])
-  const [intro] = useState(() => !introDone)
-  useEffect(() => { const t = setTimeout(() => { introDone = true }, 900); return () => clearTimeout(t) }, [])
+  const [intro, setIntro] = useState(() => !introDone)
+  // after the first entrance, cards that move between sections glide (FLIP) instead of rising again
+  useEffect(() => { const t = setTimeout(() => { introDone = true; setIntro(false) }, 900); return () => clearTimeout(t) }, [])
   const selecting = selected.size > 0
+
+  // V6.4: when cards change places (pin, sort, drag, a new note) they glide there — across columns
+  // and sections too. Positions are read after the screen settles, so it costs nothing while typing.
+  const box = useRef<HTMLDivElement>(null)
+  const before = useRef<Map<string, DOMRect> | null>(null)
+  const orderKey = groups.map((g) => g.key + ':' + g.notes.map((n) => n.id).join(',')).join('|')
+  const lastKey = useRef(orderKey)
+  const lastIds = useRef(new Set(all.map((n) => n.id)))
+  // The old positions are read during render — before React touches the DOM — and only when the
+  // order actually changed, so ordinary renders (typing, saving) cost nothing.
+  if (orderKey !== lastKey.current && box.current && all.length <= 80 && !before.current) {
+    const ids = new Set(all.map((n) => n.id))
+    let same = 0; for (const id of ids) if (lastIds.current.has(id)) same++
+    // the same cards moving (not a different view or a search): most of them were here before
+    if (same >= Math.max(1, Math.min(ids.size, lastIds.current.size) * 0.6)) before.current = flipFrom(box.current, new Map())
+  }
+  useLayoutEffect(() => {
+    if (lastKey.current === orderKey) return
+    if (before.current && box.current) flipFrom(box.current, before.current)
+    before.current = null
+    lastKey.current = orderKey; lastIds.current = new Set(all.map((n) => n.id))
+  })
 
   const onStart = (e: DragStartEvent) => {
     setActive(all.find((n) => n.id === e.active.id) ?? null)
@@ -60,6 +83,7 @@ export function Board({ groups, labels, childCount, selected, onOpen, onSelect, 
   }
 
   return (
+    <div ref={box} className="relative">
     <DndContext sensors={sensors} onDragStart={onStart} onDragEnd={onEnd} onDragOver={(e) => setOverId(e.over ? String(e.over.id) : null)} onDragCancel={() => { setActive(null); setOverId(null) }}>
       {groups.map((g) => g.notes.length > 0 && (
         <section key={g.key} className="mb-6">
@@ -80,6 +104,7 @@ export function Board({ groups, labels, childCount, selected, onOpen, onSelect, 
         )}
       </DragOverlay>
     </DndContext>
+    </div>
   )
 }
 
@@ -93,8 +118,8 @@ function Cell({ id, children, disabled, isOver, delay = 0 }: { id: string; child
   const { role: _role, 'aria-disabled': _dis, 'aria-pressed': _pressed, ...attrs } = drag.attributes
   void _role; void _dis; void _pressed
   return (
-    <div ref={(el) => { drag.setNodeRef(el); drop.setNodeRef(el) }} {...attrs} {...drag.listeners} tabIndex={-1} role="group" aria-roledescription="draggable note"
-      style={delay >= 0 ? { animationDelay: `${Math.min(delay, 24) * 28}ms` } : undefined}
+    <div ref={(el) => { drag.setNodeRef(el); drop.setNodeRef(el) }} {...attrs} {...drag.listeners} tabIndex={-1} role="group" aria-roledescription="draggable note" data-flip={id}
+      style={delay >= 0 ? { animationDelay: `calc(${Math.min(delay, 12)} * 26ms * var(--t))` } : undefined}
       className={`${delay >= 0 ? 'animate-rise' : ''} relative touch-manipulation outline-none ${isOver ? 'before:absolute before:-left-2 before:bottom-0 before:top-0 before:w-1 before:rounded-full before:bg-accent' : ''}`}>
       {children}
     </div>
@@ -230,7 +255,5 @@ function Measure({ id, onSize, children }: { id: string; onSize: (id: string, h:
 }
 
 function Column({ gap, children }: { gap: number; children: React.ReactNode }) {
-  const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  const [ref] = useAutoAnimate<HTMLDivElement>({ duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)', disrespectUserMotionPreference: false })
-  return <div ref={reduce ? undefined : ref} className="flex min-w-0 flex-1 flex-col" style={{ gap }}>{children}</div>
+  return <div className="flex min-w-0 flex-1 flex-col" style={{ gap }}>{children}</div>
 }

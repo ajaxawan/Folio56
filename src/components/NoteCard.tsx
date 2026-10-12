@@ -6,6 +6,7 @@ import { toast } from '../lib/toast'
 import { surface } from '../lib/colors'
 import { useCoverCss, useImageUrl } from '../lib/blobs'
 import { labelColor } from './LabelMenu'
+import { flyAway } from '../lib/motion'
 import { deleteForever, duplicateNote, patchNote, setTrashed, updateNote } from '../lib/db'
 import { friendlyDate } from '../lib/device'
 import { usePrefs } from '../lib/prefs'
@@ -118,7 +119,7 @@ export const NoteCard = memo(function NoteCard({ note, labels, childCount, selec
     if (st?.lock === 'x') {
       swipedRef.current = true; setTimeout(() => { swipedRef.current = false }, 300)
       if (dx > 80) { patchNote(note.id, { pinned: !note.pinned }); toast(note.pinned ? 'Unpinned' : 'Pinned', () => patchNote(note.id, { pinned: note.pinned })) }
-      else if (dx < -80) { patchNote(note.id, { archived: !note.archived, pinned: false }); toast(note.archived ? 'Moved out of Archive' : 'Archived', () => patchNote(note.id, { archived: note.archived, pinned: note.pinned })) }
+      else if (dx < -80) { if (!note.archived) void flyAway(cardOf(note.id), 'archive'); patchNote(note.id, { archived: !note.archived, pinned: false }); toast(note.archived ? 'Moved out of Archive' : 'Archived', () => patchNote(note.id, { archived: note.archived, pinned: note.pinned })) }
     }
     setDx(0)
   }
@@ -288,7 +289,7 @@ export const NoteCard = memo(function NoteCard({ note, labels, childCount, selec
                 <PillBtn label="Notebook" onClick={() => setMenu(menu === 'labels' ? null : 'labels')}><BookOpen size={15} /></PillBtn>
                 <Popover open={menu === 'labels'} onClose={() => setMenu(null)} className="bottom-9 right-0"><NotebookPicker selected={note.labels} onChange={(ids) => patchNote(note.id, { labels: ids })} /></Popover>
               </div>
-              <PillBtn label={note.archived ? 'Unarchive' : 'Archive'} onClick={() => patchNote(note.id, { archived: !note.archived, pinned: false })}>
+              <PillBtn label={note.archived ? 'Unarchive' : 'Archive'} onClick={() => { if (!note.archived) void flyAway(cardOf(note.id), 'archive'); patchNote(note.id, { archived: !note.archived, pinned: false }) }}>
                 {note.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
               </PillBtn>
               <div className="relative">
@@ -296,7 +297,7 @@ export const NoteCard = memo(function NoteCard({ note, labels, childCount, selec
                 <Popover open={menu === 'more'} onClose={() => setMenu(null)} className="bottom-9 right-0 w-48">
                   {!note.locked && <MenuItem icon={<Send size={15} />} onClick={() => { setMenu(null); sendNotes([note.id]) }}>Share as link…</MenuItem>}
                   <MenuItem icon={<Copy size={15} />} onClick={() => { setMenu(null); duplicateNote(note) }}>Make a copy</MenuItem>
-                  <MenuItem icon={<Trash2 size={15} />} danger onClick={() => { setMenu(null); setTrashed(note.id, true) }}>Move to trash</MenuItem>
+                  <MenuItem icon={<Trash2 size={15} />} danger onClick={() => { setMenu(null); void flyAway(cardOf(note.id), 'trash'); setTrashed(note.id, true) }}>Move to trash</MenuItem>
                 </Popover>
               </div>
             </>
@@ -314,3 +315,6 @@ function PillBtn({ label, onClick, children }: { label: string; onClick: () => v
       className="flex h-7 w-7 items-center justify-center rounded-full text-ink-2 hover:bg-wash hover:text-ink">{children}</button>
   )
 }
+
+/** The board cell around a card (what moves on the board). */
+const cardOf = (id: string) => document.querySelector(`[data-flip="${CSS.escape(id)}"]`) ?? document.querySelector(`article[data-note="${CSS.escape(id)}"]`)

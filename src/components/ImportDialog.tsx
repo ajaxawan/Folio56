@@ -2,7 +2,7 @@ import { BlockNoteView, darkDefaultTheme, lightDefaultTheme } from '@blocknote/m
 import { useCreateBlockNote } from '@blocknote/react'
 import '@blocknote/mantine/style.css'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { AlertTriangle, CheckCircle2, ClipboardPaste, Code2, FileText, FolderOpen, Image as ImageIcon, ListChecks, Table2, BookOpen, Upload, X } from 'lucide-react'
+import { AlertTriangle, ClipboardPaste, Code2, FileText, FolderOpen, Image as ImageIcon, ListChecks, Table2, BookOpen, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { dot, swatch } from '../lib/colors'
 import { db } from '../lib/db'
@@ -13,7 +13,7 @@ import { usePrefs } from '../lib/prefs'
 import type { ColorKey, Note } from '../types'
 import { ColorPicker } from './ColorPicker'
 import { NotebookPicker } from './LabelPicker'
-import { IconButton, Popover, Segmented } from './ui'
+import { DoneMark, IconButton, Popover, Segmented } from './ui'
 
 interface Raw { text: string; name: string; path: string }
 
@@ -84,7 +84,7 @@ export default function ImportDialog({ initialFiles, defaultLabelIds = [], defau
 
         {done ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-            <CheckCircle2 size={44} className="text-accent" />
+            <DoneMark size={52} />
             <p className="font-title text-[22px] font-semibold">Imported {done.length} {noun(done.length)}</p>
             <p className="text-[13.5px] text-ink-2">{asPages ? 'They’re under Pages.' : 'They’re on the Notes board.'}</p>
             <p className="max-w-sm text-[13.5px] text-muted">Headings, tables, code, checklists and quotes kept their formatting.{chosen.some((d) => d.missingImages.length) ? ' Some images were not found and are marked in the notes.' : ''}</p>

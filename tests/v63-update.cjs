@@ -1,12 +1,13 @@
 // V6.3 updates, for real: a service worker is installed, a newer build is put on the server, and
 // "Check for updates" finds it, offers it, and installs it. Needs `npm run preview` on :4174.
-// Rebuilds dist/ twice (a "newer" 6.3.x-test, then the normal build again).
+// Rebuilds dist/ twice (a "newer" patch build of this version, then the normal build again).
 const { chromium } = require('playwright');
 const { execSync } = require('child_process')
 const path = require('path')
 const APP = (process.env.ORIGIN || 'http://localhost:4174') + '/app/'
 const ROOT = path.join(__dirname, '..')
 const results = []; const ok = (n, p, i = '') => { results.push({ n, p: !!p }); console.log(p ? 'PASS' : 'FAIL', n, i) };
+const NEXT = require('../package.json').version.split('.').slice(0, 2).join('.') + '.9-test' // a patch release of this version
 const build = (env = {}) => execSync('npx vite build', { cwd: ROOT, env: { ...process.env, ...env }, stdio: 'pipe' })
 
 ;(async () => {
@@ -26,7 +27,7 @@ const build = (env = {}) => execSync('npx vite build', { cwd: ROOT, env: { ...pr
     ok('Check for updates: nothing new yet', await set.getByText('You have the latest version.').isVisible())
     await p.keyboard.press('Escape'); await p.waitForTimeout(300)
 
-    build({ FOLIO_VERSION: '6.3.9-test' })
+    build({ FOLIO_VERSION: NEXT })
     set = await settings()
     await set.getByRole('button', { name: 'Check for updates' }).click()
     await set.getByText('A new version is ready.').waitFor({ timeout: 30000 }).catch(() => {})
@@ -35,7 +36,7 @@ const build = (env = {}) => execSync('npx vite build', { cwd: ROOT, env: { ...pr
     await set.getByRole('button', { name: 'Update now' }).click()
     await p.waitForEvent('load', { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(1800)
     set = await settings()
-    ok('Update now installs it and reloads into the new version', /6\.3\.9-test/.test(await set.innerText()))
+    ok('Update now installs it and reloads into the new version', (await set.innerText()).includes(NEXT))
     await p.keyboard.press('Escape')
     ok('a patch update doesn’t show “What’s new”', !(await p.getByRole('status').filter({ hasText: 'Folio56 is now' }).count()))
     await ctx.close()

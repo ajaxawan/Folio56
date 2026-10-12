@@ -296,10 +296,7 @@ input:focus, textarea:focus { outline: none; }
 .animate-slideup { animation: slideup .22s cubic-bezier(.2,.9,.3,1); }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .22s; }
 ::view-transition-group(*) { animation-duration: .32s; animation-timing-function: cubic-bezier(.2,.8,.2,1); }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
-  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
-}
+/* (V6.4: "reduce motion" is handled by the motion system below — data-motion="still") */
 
 /* ---------- V4 atmosphere ---------- */
 .candle-overlay { position: fixed; inset: 0; z-index: 90; pointer-events: none; background: rgb(255 214 170); mix-blend-mode: multiply; transition: opacity 2s ease; }
@@ -505,3 +502,91 @@ button:hover > .tpl-frame { box-shadow: 0 0 0 1px color-mix(in srgb, var(--color
 .tpl-fade { position: absolute; inset: auto 0 0 0; height: 22%; pointer-events: none; }
 /* the banner on a template's working copy */
 .tpl-banner { background: color-mix(in srgb, var(--color-accent) 13%, var(--color-canvas)); border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 35%, var(--color-line)); }
+
+/* ================================================================ V6.4 motion system
+   One set of timings for everything. <html data-motion> is calm (default), lively or still.
+   Only transform and opacity animate; nothing moves while you type. */
+:root {
+  --t: 1;                /* time scale */
+  --lift: 1;             /* distance scale */
+  --ease-out: cubic-bezier(.22,.8,.24,1);
+  --ease-in: cubic-bezier(.45,0,.8,.35);
+  --ease-spring: var(--ease-out);
+  --d1: calc(.14s * var(--t));   /* small: hovers, presses, fades */
+  --d2: calc(.22s * var(--t));   /* medium: menus, toasts, dialogs */
+  --d3: calc(.34s * var(--t));   /* large: sheets, page moves */
+  --d4: calc(.46s * var(--t));   /* entrances */
+}
+@supports (animation-timing-function: linear(0, 1)) {
+  :root { --ease-spring: linear(0, 0.062, 0.2, 0.362, 0.519, 0.656, 0.766, 0.85, 0.911, 0.953, 0.98, 0.997, 1.006, 1.01, 1.011, 1.01, 1.009, 1.007, 1.005, 1.004, 1.003, 1.002, 1.001, 1.001, 1, 1, 1, 1, 1); }
+  :root[data-motion="lively"] { --ease-spring: linear(0, 0.077, 0.253, 0.464, 0.666, 0.834, 0.958, 1.038, 1.081, 1.095, 1.09, 1.074, 1.054, 1.035, 1.018, 1.006, 0.997, 0.993, 0.991, 0.991, 0.993, 0.995, 0.996, 0.998, 0.999, 1, 1.001, 1.001, 1); }
+}
+:root[data-motion="lively"] { --t: 1.12; --lift: 1.7; }
+
+/* the shared moves */
+@keyframes pop { from { opacity: 0; transform: translateY(calc(6px * var(--lift))) scale(.975); } to { opacity: 1; transform: none; } }
+.animate-pop { animation: pop var(--d2) var(--ease-spring) both; transform-origin: var(--origin, 50% 30%); }
+.animate-fade { animation: fade var(--d1) var(--ease-out) both; }
+.animate-slidein { animation: slidein var(--d2) var(--ease-out) both; }
+.animate-slideup { animation: slideup var(--d3) var(--ease-spring) both; }
+.animate-sheet { animation: sheetin var(--d3) var(--ease-spring) both; }
+.animate-drawer { animation: drawerin var(--d3) var(--ease-spring) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(calc(10px * var(--lift))) } to { opacity: 1; transform: none } }
+.animate-rise { animation: rise var(--d4) var(--ease-out) both; }
+.tick { animation: tick calc(.3s * var(--t)) var(--ease-out); }
+.strike { transition: background-size calc(.32s * var(--t)) var(--ease-out), color var(--d2) ease; }
+
+/* leaving: dialogs and toasts fade down a touch, faster than they arrived */
+@keyframes leave { to { opacity: 0; transform: translateY(calc(4px * var(--lift))) scale(.985); } }
+.animate-leave { animation: leave var(--d1) var(--ease-in) both !important; pointer-events: none; }
+@keyframes sheetout { to { transform: translateY(100%); } }
+.animate-sheet-out { animation: sheetout var(--d2) var(--ease-in) both !important; pointer-events: none; }
+@keyframes fadeout { to { opacity: 0; } }
+.animate-fade-out { animation: fadeout var(--d2) var(--ease-in) both !important; }
+
+/* presses: everything tappable gives a little (low specificity, so components can say otherwise) */
+:where(button, [role="button"], a.btn):where(:not(:disabled)) { transition-property: transform, color, background-color, border-color, opacity, box-shadow; transition-duration: var(--d1); transition-timing-function: var(--ease-out); }
+:where(button, [role="button"]):not(:disabled):active { transform: scale(.97); }
+.bn-container button:active, .bn-container [role="button"]:active { transform: none; }
+
+/* view switches: a soft cross-fade with a short slide in the direction you went */
+::view-transition-old(root) { animation: vt-out var(--d1) var(--ease-in) both; }
+::view-transition-new(root) { animation: vt-in var(--d2) var(--ease-out) both; }
+@keyframes vt-out { to { opacity: 0; } }
+@keyframes vt-in { from { opacity: 0; } } /* card ⇄ page: the card does the moving; the rest just fades */
+:root[data-vt="forward"]::view-transition-new(root) { animation-name: vt-in-fwd; }
+:root[data-vt="back"]::view-transition-new(root) { animation-name: vt-in-back; }
+@keyframes vt-in-fwd { from { opacity: 0; transform: translateX(calc(12px * var(--lift))); } }
+@keyframes vt-in-back { from { opacity: 0; transform: translateX(calc(-12px * var(--lift))); } }
+/* a card growing into its page (and back) */
+::view-transition-group(*) { animation-duration: var(--d3); animation-timing-function: var(--ease-spring); }
+/* a new theme spreads out from the swatch you tapped */
+:root[data-vt="reveal"]::view-transition-old(root) { animation: none; }
+:root[data-vt="reveal"]::view-transition-new(root) { animation: reveal calc(.62s * var(--t)) var(--ease-out) both; }
+@keyframes reveal { from { clip-path: circle(0 at var(--rx, 50%) var(--ry, 50%)); } to { clip-path: circle(var(--rr, 150vmax) at var(--rx, 50%) var(--ry, 50%)); } }
+
+/* done: a circle settles and the tick draws itself */
+@keyframes donecircle { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+.done-mark { animation: donecircle var(--d3) var(--ease-spring) both; }
+.done-mark path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: ink calc(.36s * var(--t)) calc(.14s * var(--t)) var(--ease-out) forwards; }
+
+/* still: nothing travels; state changes still happen, instantly */
+:root[data-motion="still"] *:not(.animate-spin):not(.rec-pulse), :root[data-motion="still"] *::before, :root[data-motion="still"] *::after {
+  animation: none !important; transition: none !important;
+}
+/* things that draw themselves just appear drawn */
+:root[data-motion="still"] .done-mark path, :root[data-motion="still"] .ink-draw { stroke-dashoffset: 0; }
+:root[data-motion="still"]::view-transition-group(*), :root[data-motion="still"]::view-transition-old(*), :root[data-motion="still"]::view-transition-new(*) { animation: none !important; }
+:root[data-motion="still"] :where(button, [role="button"]):active { transform: none; }
+.seg-thumb { transition: transform var(--d3) var(--ease-spring); }
+/* dialogs grow out of what you tapped */
+@keyframes grow { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+.animate-grow { animation: grow var(--d3) var(--ease-spring) both; transform-origin: var(--origin, 50% 40%); }
+@keyframes toast { from { opacity: 0; transform: translateY(calc(14px * var(--lift))) scale(.96); } to { opacity: 1; transform: none; } }
+.animate-toast { animation: toast var(--d3) var(--ease-spring) both; }
+.beam-fill { transition: transform var(--d3) var(--ease-out); }
+.switch-knob { transition: transform var(--d2) var(--ease-spring); }
+[role="switch"]:active .switch-knob { scale: 1.12 1; }
+.sheet-grip { touch-action: none; }
+/* phones: the grip and header of a sheet are for dragging it, not scrolling */
+.sheet > .sheet-grip, .sheet-drag { touch-action: none; user-select: none; -webkit-user-select: none; }

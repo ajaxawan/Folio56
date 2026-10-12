@@ -65,13 +65,13 @@ export async function applyUpdate() {
 // ---------------------------------------------------------------- what's new
 /** The few things worth knowing about this version, shown once after an update. */
 export const WHATS_NEW: { version: string; items: string[] } = {
-  version: '6.3',
+  version: '6.4',
   items: [
-    'Folio Beam: share notes as QR codes, screen to camera — no internet, no chat app. Share → Beam.',
-    'Receive with Beam from the + menu on phones, Ctrl K, or Settings.',
-    'Import Markdown as notes or as pages — sub-folders become pages, or notebooks.',
-    'Move a page inside another page from its ⋯ menu.',
-    'Folio now checks for new versions by itself, and Settings → About has “Check for updates”.',
+    'Sync my devices: scan a code on each device and they bring each other up to date over your Wi-Fi — pictures and recordings too. No account, no server.',
+    'Only what changed travels. A note changed on both devices is kept twice, so nothing is lost.',
+    'Not on the same Wi-Fi? Sync with QR codes instead — slower, but it works anywhere.',
+    '“Mentioned in · not linked”: notes that name this one, with one tap to turn the mention into a link.',
+    'Calmer, smoother motion everywhere: cards glide when they move, archived notes fly to Archive, new themes spread from your tap. Settings → Motion: Calm, Lively or Still.',
   ],
 }
 

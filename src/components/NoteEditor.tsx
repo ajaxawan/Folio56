@@ -41,6 +41,7 @@ import { formaliseText, isProcessing, processMemo } from '../lib/voice'
 import { SaveTemplateDialog, TemplateDraftBar } from './TemplateBits'
 import { toast } from '../lib/toast'
 import { isPage } from '../lib/kinds'
+import { linkFirstMention, mentionable, scanMentions } from '../lib/mentions'
 import { MovePageDialog } from './MovePage'
 const TemplateGallery = lazy(() => import('./TemplateGallery').then((m) => ({ default: m.TemplateGallery })))
 const ExportDialog = lazy(() => import('./ExportDialog').then((m) => ({ default: m.ExportDialog })))
@@ -369,6 +370,30 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
     return () => { dead = true }
   }, [note.id])
   linkGo.current = (id: string) => { if (id) void go(id) }
+  // V6.4: notes that name this one but don't link to it yet
+  const [mentions, setMentions] = useState<{ n: Note; snip: string }[]>([])
+  const [allMentions, setAllMentions] = useState(false)
+  useEffect(() => {
+    let dead = false
+    let cancel = () => {}
+    // starts once you've settled in, and runs only in idle moments (never delays opening or typing)
+    const t = window.setTimeout(async () => {
+      const name = title.trim()
+      if (!mentionable(name) || note.daily) { setMentions([]); return }
+      const list = await db.notes.filter((n) => n.trashedAt === null && n.id !== note.id && !n.locked && !n.templateDraft && !n.rav).toArray()
+      if (dead) return
+      cancel = scanMentions(list, name, note.id, (out) => { if (!dead) setMentions(out.sort((a, b) => b.n.updatedAt - a.n.updatedAt)) })
+    }, 1200)
+    return () => { dead = true; window.clearTimeout(t); cancel() }
+  }, [note.id, title, backlinks.length, note.daily]) // eslint-disable-line react-hooks/exhaustive-deps
+  const linkMention = async (other: Note) => {
+    const fresh = await db.notes.get(other.id); if (!fresh) return
+    const next = linkFirstMention(fresh.content, title.trim(), note.id); if (!next) return
+    await updateNote(other.id, { content: next })
+    setMentions((m) => m.filter((x) => x.n.id !== other.id))
+    setBacklinks((b) => [...b, fresh])
+    toast(`Linked in “${fresh.title || 'Untitled'}”`, () => updateNote(other.id, { content: fresh.content }))
+  }
 
 
   // keyboard: Esc leaves focus mode, then closes; Ctrl+Shift+F focus; Ctrl+S save version
@@ -642,6 +667,22 @@ function EditorPage({ note, initial, onClose, onNavigate, focus, setFocus, setAs
                     <span className="truncate">{b.title || 'Untitled'}</span>
                   </button>
                 ))}
+              </div>
+            )}
+            {mentions.length > 0 && (
+              <div className={`no-print mt-6 px-[26px] sm:px-[54px] ${focus ? 'opacity-0' : ''}`} aria-label="Unlinked mentions" role="region">
+                <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[.1em] text-muted"><Link2 size={12} className="opacity-60" /> Mentioned in · not linked</div>
+                {(allMentions ? mentions : mentions.slice(0, 4)).map(({ n, snip }) => (
+                  <div key={n.id} className="group flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-wash">
+                    <button type="button" onClick={() => go(n.id)} className="min-w-0 flex-1 text-left">
+                      <span className="block truncate text-[14.5px] text-ink-2">{n.title || 'Untitled'}</span>
+                      <span className="block truncate text-[12.5px] text-faint">{snip}</span>
+                    </button>
+                    <button type="button" onClick={() => linkMention(n)} aria-label={`Link the mention in ${n.title || 'Untitled'}`}
+                      className="mt-0.5 shrink-0 rounded-full border border-line px-2.5 py-1 text-[12px] text-ink-2 hover:border-accent/60 hover:text-ink">Link</button>
+                  </div>
+                ))}
+                {mentions.length > 4 && <button type="button" onClick={() => setAllMentions(!allMentions)} className="px-2 py-1 text-[12.5px] text-muted hover:text-ink">{allMentions ? 'Show fewer' : `Show ${mentions.length - 4} more`}</button>}
               </div>
             )}
             {/* sub-pages */}

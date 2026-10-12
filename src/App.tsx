@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import {
-  Archive, ArchiveRestore, ArrowDownUp, Compass, BookOpen, BookOpenText, CalendarCheck, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon, QrCode, RefreshCw,
+  Archive, ArchiveRestore, ArrowDownUp, Compass, BookOpen, BookOpenText, CalendarCheck, MoreHorizontal, FileDown, FileUp, CheckSquare, Download, FileText, LayoutGrid, LayoutTemplate, Lightbulb, List, Menu, Moon, Sparkles, QrCode, RefreshCw, ArrowLeftRight,
   Layers, Link2, Mic, PanelLeftOpen, Presentation, Palette, Pin, RotateCcw, Search, Send, Settings as SettingsIcon, SquarePen, Sun, BookMarked, FilePlus2, Trash2, X,
 } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -18,6 +18,8 @@ import { NotebookPicker } from './components/LabelPicker'
 import { PageStrip, PagesView } from './components/PagesView'
 import { pageIds } from './lib/kinds'
 import { checkForUpdate } from './lib/updates'
+import { flyMany, still, viewTransition } from './lib/motion'
+import { openSync, useSyncRequest } from './lib/syncBus'
 import { receiveParcel, scanBeam, sendNotes, useParcelRequest } from './lib/parcelBus'
 import { Sidebar } from './components/Sidebar'
 import { TasksView } from './components/TasksView'
@@ -50,6 +52,7 @@ const RavDialog = lazy(() => import('./components/RavBits').then((m) => ({ defau
 const DeckMaker = lazy(() => import('./components/DeckMaker').then((m) => ({ default: m.DeckMaker })))
 const ExportDialog = lazy(() => import('./components/ExportDialog').then((m) => ({ default: m.ExportDialog })))
 const ParcelHost = lazy(() => import('./components/ParcelDialogs').then((m) => ({ default: m.ParcelHost })))
+const SyncHost = lazy(() => import('./components/SyncDialog').then((m) => ({ default: m.SyncHost })))
 const NoteEditor = lazy(() => import('./components/NoteEditor').then((m) => ({ default: m.NoteEditor })))
 const CreateSheet = lazy(() => import('./components/CreateSheet').then((m) => ({ default: m.CreateSheet })))
 const SeriesSheet = lazy(() => import('./components/SeriesSheet').then((m) => ({ default: m.SeriesSheet })))
@@ -61,9 +64,9 @@ const VoiceRecorder = lazy(() => import('./components/VoiceRecorder').then((m) =
  * Card ⇄ editor morph. Only the one card being opened/closed carries the shared name, and only
  * for the length of the transition — so moving cards, drag ghosts and the drag overlay never clash.
  */
-function transition(fn: () => void, noteId?: string | null) {
+function transition(fn: () => void, noteId?: string | null, kind?: 'forward' | 'back') {
   const doc = document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } }
-  if (!doc.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return fn()
+  if (!doc.startViewTransition || still()) return fn()
   const tag = () => {
     if (!noteId) return
     const card = document.querySelector<HTMLElement>(`article[data-note="${CSS.escape(noteId)}"]`)
@@ -71,9 +74,11 @@ function transition(fn: () => void, noteId?: string | null) {
   }
   const clear = () => document.querySelectorAll<HTMLElement>('article[data-note]').forEach((el) => { el.style.viewTransitionName = '' })
   tag()
-  const vt = doc.startViewTransition(() => { flushSync(fn); tag() })
-  vt.finished.finally(clear)
+  const vt = viewTransition(() => { flushSync(fn); tag() }, kind)
+  vt?.finished.finally(clear)
 }
+/** Views in sidebar order: moving down the list slides one way, up the other. */
+const NAV_ORDER = ['notes', 'pages', 'journal', 'margins', 'tasks', 'review', 'archive', 'trash', 'label']
 const byIdLabels = (notes: Note[], id: string) => notes.find((n) => n.id === id)?.labels
 // Stable empties so memoised views don't recompute while the database is still opening.
 const NO_NOTES: Note[] = []
@@ -105,6 +110,7 @@ export default function App() {
   const [menu, setMenu] = useState<null | 'sort' | 'phoneMenu' | 'bulkColor' | 'bulkLabel' | 'labelMenu'>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const parcelReq = useParcelRequest()
+  const syncReq = useSyncRequest()
   const openRef = useRef<string | null>(null)
   useEffect(() => { openRef.current = openId }, [openId])
   const [importing, setImporting] = useState<null | File[]>(null)
@@ -149,7 +155,7 @@ export default function App() {
   const setView = (v: View) => {
     if (mainScroll.current) scrollMemo.current.set(viewKey(view), mainScroll.current.scrollTop)
     const go = () => { setViewRaw(v); setScrolled(false); setDrawer(false); setSelected(new Set()) }
-    if (openId) { closeNote(); go() } else if (viewKey(v) !== viewKey(view)) transition(go); else go()
+    if (openId) { closeNote(); go() } else if (viewKey(v) !== viewKey(view)) transition(go, null, NAV_ORDER.indexOf(v.kind) >= NAV_ORDER.indexOf(view.kind) ? 'forward' : 'back'); else go()
   }
 
   useLayoutEffect(() => {
@@ -402,6 +408,7 @@ export default function App() {
     { id: 'mode-toggle', label: dark ? 'Switch to light mode' : 'Switch to dark mode', icon: dark ? <Sun size={16} /> : <Moon size={16} />, keywords: 'theme appearance light dark mode paper', run: () => set({ mode: dark ? 'light' : 'dark' }) },
     ...LIGHT_THEMES.map((t) => ({ id: `light-${t.key}`, label: `Light theme: ${t.label}`, icon: <Sun size={16} />, keywords: 'theme appearance light ' + t.note, run: () => set({ lightTheme: t.key, mode: 'light' as const }) })),
     ...THEMES.map((t) => ({ id: `theme-${t.key}`, label: `Theme: ${t.label}`, icon: <Moon size={16} />, keywords: 'theme appearance dark ' + t.note, run: () => set({ theme: t.key, accent: t.accent, ...(prefs.mode === 'light' ? { mode: 'dark' as const } : {}) }) })),
+    ...(['calm', 'lively', 'still'] as const).map((m) => ({ id: `motion-${m}`, label: `Motion: ${m[0].toUpperCase() + m.slice(1)}`, icon: <Sparkles size={16} />, keywords: 'motion animation animations reduce movement calm lively still', run: () => set({ motion: m }) })),
     { id: 'layout', label: prefs.layout === 'grid' ? 'Show as list' : 'Show as grid', icon: prefs.layout === 'grid' ? <List size={16} /> : <LayoutGrid size={16} />, run: () => set({ layout: prefs.layout === 'grid' ? 'list' : 'grid' }) },
     { id: 'cards', label: prefs.cardStyle === 'vivid' ? 'Use subtle card colours' : 'Use vivid card colours', icon: <Palette size={16} />, run: () => set({ cardStyle: prefs.cardStyle === 'vivid' ? 'subtle' : 'vivid' }) },
     { id: 'density', label: prefs.density === 'compact' ? 'Comfortable cards' : 'Compact cards', icon: <LayoutGrid size={16} />, run: () => set({ density: prefs.density === 'compact' ? 'comfortable' : 'compact' }) },
@@ -413,6 +420,7 @@ export default function App() {
     { id: 'export', label: 'Export backup (JSON)', icon: <Download size={16} />, keywords: 'backup json', run: exportAll },
     { id: 'send-all', label: 'Share all notes as a link…', icon: <Send size={16} />, keywords: 'share send link transfer device', run: () => sendNotes('all') },
     { id: 'update', label: 'Check for updates', icon: <RefreshCw size={16} />, keywords: 'update new version reload refresh upgrade', run: async () => { const st = await checkForUpdate(); if (st === 'current') toast('You have the latest version'); else if (st === 'offline') toast('Can’t check while offline'); else if (st === 'unsupported') location.reload() } },
+    { id: 'sync', label: 'Sync my devices…', icon: <ArrowLeftRight size={16} />, keywords: 'sync devices phone laptop wifi qr transfer merge other device', run: () => openSync() },
     { id: 'beam-receive', label: 'Receive with Beam (scan a code)…', icon: <QrCode size={16} />, keywords: 'beam qr scan camera receive share transfer phone', run: scanBeam },
     { id: 'receive', label: 'Open a shared link…', icon: <Link2 size={16} />, keywords: 'receive import paste link', run: () => receiveParcel() },
     { id: 'settings', label: 'Settings', icon: <SettingsIcon size={16} />, run: () => setSettings(true) },
@@ -501,10 +509,10 @@ export default function App() {
                         <NotebookPicker title="Move selected to" extras={false} selected={[]} onChange={(ids) => bulk(() => ids[0] ? moveToNotebook(sel, ids[0]) : patchMany(sel, { labels: [] }))} />
                       </Popover>
                     </div>
-                    <IconButton label={view.kind === 'archive' ? 'Unarchive' : 'Archive'} onClick={() => bulk(() => patchMany(sel, { archived: view.kind !== 'archive', pinned: false }))}>
+                    <IconButton label={view.kind === 'archive' ? 'Unarchive' : 'Archive'} onClick={() => { if (view.kind !== 'archive') flyMany(sel, 'archive'); bulk(() => patchMany(sel, { archived: view.kind !== 'archive', pinned: false })) }}>
                       {view.kind === 'archive' ? <ArchiveRestore size={19} /> : <Archive size={19} />}
                     </IconButton>
-                    <IconButton label="Move to trash" onClick={() => bulk(() => setTrashed(sel, true))}><Trash2 size={19} /></IconButton>
+                    <IconButton label="Move to trash" onClick={() => { flyMany(sel, 'trash'); bulk(() => setTrashed(sel, true)) }}><Trash2 size={19} /></IconButton>
                   </>
                 )}
               </header>
@@ -672,6 +680,7 @@ export default function App() {
         {rav && <RavDialog noteId={openId ?? undefined} onClose={() => setRav(false)} onDone={(id) => { setRav(false); openNote(id) }} />}
         {settings && <SettingsDialog noteCount={liveCount} onClose={() => setSettings(false)} onImport={() => setImporting([])} onExport={() => { setSettings(false); setExporting({ all: true }) }} onTemplates={() => { setSettings(false); setTemplates(true) }} onWelcome={async () => { const { addWelcomeNote } = await import('./lib/welcome'); openNote(await addWelcomeNote()) }} />}
         {parcelReq && <ParcelHost onOpenNote={openNote} />}
+        {syncReq && <SyncHost onOpenNote={openNote} />}
         {stackHint && <SeriesSheet ids={stackHint.ids} suggestion={stackHint.name} onClose={() => setStackHint(null)} />}
         {stackIds && <SeriesSheet ids={stackIds} onClose={() => setStackIds(null)} suggestion={labels.find((l) => stackIds.every((id) => notes.find((n) => n.id === id)?.labels.includes(l.id)))?.name} />}
         {create && <CreateSheet onClose={() => setCreate(false)} onNote={newNote} onList={newList} onVoice={() => setRecording('memo')} onPhoto={newPhoto} onTemplate={() => setTemplates(true)} onPage={newPage} onToday={today} onReceive={scanBeam} onDeck={() => setDeckMaker(true)} />}

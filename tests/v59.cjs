@@ -83,6 +83,7 @@ const seed = (days) => new Promise((res) => {
     // themes
     await p.getByRole('button', { name: /^Dark · 11/ }).click()
     ok('11 dark and 6 light themes', (await p.getByRole('button', { name: /^Dark · 11/ }).count()) === 1 && (await p.getByRole('button', { name: /^Light · 6/ }).count()) === 1)
+    await p.mouse.move(5, 5); await p.waitForTimeout(150) // 6.4: a closing dialog can leave the pointer resting on a theme
     const before = await p.evaluate(() => document.documentElement.dataset.theme)
     await p.getByRole('button', { name: /^Ember/ }).hover(); await p.waitForTimeout(150)
     ok('hovering a theme previews it on the whole app', await p.evaluate(() => document.documentElement.dataset.theme === 'ember'))

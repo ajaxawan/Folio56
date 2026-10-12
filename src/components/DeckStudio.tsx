@@ -445,6 +445,6 @@ function Present({ deck, start, author, onExit }: { deck: Deck; start: number; a
           <button type="button" onClick={exit} className="ml-auto rounded-full px-3 py-1.5 text-[13px] text-white/85 hover:bg-white/10">End show (Esc)</button>
         </div>
       </div>
-      <div className="absolute inset-x-0 top-0 h-[3px] bg-white/10"><div className="h-full bg-white/70 transition-[width] duration-300" style={{ width: `${((i + 1) / deck.slides.length) * 100}%` }} /></div>
+      <div className="absolute inset-x-0 top-0 h-[3px] bg-white/10"><div className="beam-fill h-full w-full origin-left bg-white/70" style={{ transform: `scaleX(${(i + 1) / deck.slides.length})` }} /></div>
     </div>, document.body)
 }

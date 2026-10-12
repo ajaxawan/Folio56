@@ -7,9 +7,9 @@ import type { Label, Note, View } from '../types'
 import { initials } from '../lib/device'
 import { backupStatus, useLastBackup } from '../lib/backup'
 
-function Item({ icon, children, active, onClick, count }: { icon: React.ReactNode; children: React.ReactNode; active?: boolean; onClick: () => void; count?: number }) {
+function Item({ icon, children, active, onClick, count, nav }: { icon: React.ReactNode; children: React.ReactNode; active?: boolean; onClick: () => void; count?: number; nav?: string }) {
   return (
-    <button type="button" onClick={onClick} aria-current={active ? 'page' : undefined}
+    <button type="button" onClick={onClick} aria-current={active ? 'page' : undefined} data-nav={nav}
       className={`relative flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[14px] transition-colors coarse:py-2.5 ${active ? 'bg-[color-mix(in_srgb,var(--color-accent)_14%,transparent)] font-medium text-ink before:absolute before:-left-2 before:top-2 before:bottom-2 before:w-[3px] before:rounded-full before:bg-accent' : 'text-ink-2 hover:bg-wash hover:text-ink'}`}>
       <span className={active ? 'text-accent' : 'text-muted'}>{icon}</span>
       <span className="flex-1 truncate">{children}</span>
@@ -59,8 +59,8 @@ export function Sidebar({ view, setView, labels, labelCounts, recents, openTasks
         <Item icon={<BookOpen size={18} />} active={is('journal')} onClick={() => setView({ kind: 'journal' })}>Journal</Item>
         <Item icon={<BookOpenText size={18} />} active={is('margins')} onClick={() => setView({ kind: 'margins' })}>Margins</Item>
         <Item icon={<CheckSquare size={18} />} active={is('tasks') || is('review')} onClick={() => setView({ kind: 'tasks' })} count={openTasks}>Tasks</Item>
-        <Item icon={<Archive size={18} />} active={is('archive')} onClick={() => setView({ kind: 'archive' })}>Archive</Item>
-        <Item icon={<Trash2 size={18} />} active={is('trash')} onClick={() => setView({ kind: 'trash' })}>Trash</Item>
+        <Item icon={<Archive size={18} />} active={is('archive')} onClick={() => setView({ kind: 'archive' })} nav="archive">Archive</Item>
+        <Item icon={<Trash2 size={18} />} active={is('trash')} onClick={() => setView({ kind: 'trash' })} nav="trash">Trash</Item>
       </nav>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">

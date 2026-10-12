@@ -1,7 +1,9 @@
-import { Check, FileDown, FileUp, KeyRound, LayoutTemplate, Link2, QrCode, RefreshCw, Send } from 'lucide-react'
+import { Check, FileDown, FileUp, KeyRound, LayoutTemplate, Link2, QrCode, RefreshCw, Send, ArrowLeftRight } from 'lucide-react'
 import { receiveParcel, scanBeam, sendNotes } from '../lib/parcelBus'
+import { openSync } from '../lib/syncBus'
 import { applyUpdate, checkForUpdate, useUpdateState } from '../lib/updates'
 import { WhatsNewDialog } from './Safety'
+import { reduceMotion } from '../lib/motion'
 import { useEffect, useRef, useState } from 'react'
 import { hasPasscode } from '../lib/db'
 import { setSessionPasscode } from '../lib/crypto'
@@ -44,7 +46,7 @@ function ThemePicker() {
           return (
             <button key={t.key} type="button" aria-pressed={chosen}
               onMouseEnter={() => preview(t.key, tab)} onFocus={() => preview(t.key, tab)} onBlur={unpreview}
-              onClick={() => { saved.current = null; set(isDark ? { theme: t.key as typeof prefs.theme, accent: (t as (typeof THEMES)[number]).accent, ...(prefs.wallpaper === 'none' ? { accentHex: null } : {}), ...(prefs.mode === 'light' ? { mode: 'dark' as const } : {}) } : { lightTheme: t.key as typeof prefs.lightTheme, ...(prefs.mode === 'dark' ? { mode: 'light' as const } : {}) }) }}
+              onClick={() => { unpreview(); set(isDark ? { theme: t.key as typeof prefs.theme, accent: (t as (typeof THEMES)[number]).accent, ...(prefs.wallpaper === 'none' ? { accentHex: null } : {}), ...(prefs.mode === 'light' ? { mode: 'dark' as const } : {}) } : { lightTheme: t.key as typeof prefs.lightTheme, ...(prefs.mode === 'dark' ? { mode: 'light' as const } : {}) }) }}
               className={`flex flex-col items-start gap-1.5 rounded-xl border p-2 text-left transition-colors ${chosen ? 'border-accent bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)]' : 'border-line hover:border-muted/60'}`}>
               <span className="relative flex h-12 w-full overflow-hidden rounded-md ring-1 ring-line" style={{ background: t.swatch[0] }}>
                 <span className="absolute bottom-1.5 left-1.5 h-5 w-10 rounded shadow-sm" style={{ background: t.swatch[1] }} />
@@ -110,6 +112,9 @@ export function SettingsDialog({ onClose, noteCount, onImport, onExport, onTempl
           <Segmented value={prefs.density} onChange={(density) => set({ density })} options={[{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }]} />
         </div>
       </Row>
+      <Row label="Motion">
+        <MotionPicker />
+      </Row>
       <Row label="AI">
         <div className="space-y-2">
           <Switch label={<span>AI features <span className="text-muted">· uses your own free Groq key</span></span>} checked={prefs.ai === true} onChange={(ai) => set({ ai })} />
@@ -168,6 +173,7 @@ export function SettingsDialog({ onClose, noteCount, onImport, onExport, onTempl
           <button type="button" onClick={() => { onClose(); receiveParcel() }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-wash px-3 py-2.5 text-[14px] hover:bg-wash-2"><Link2 size={16} /> Open a link</button>
           <button type="button" onClick={() => { onClose(); scanBeam() }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-wash px-3 py-2.5 text-[14px] hover:bg-wash-2"><QrCode size={16} /> Receive</button>
         </div>
+        <button type="button" onClick={() => { onClose(); openSync() }} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-wash px-3 py-2.5 text-[14px] hover:bg-wash-2"><ArrowLeftRight size={16} /> Sync my devices</button>
       </Row>
       <Row label="About">
         <div className="flex flex-wrap items-center gap-2 text-[13.5px]">
@@ -195,6 +201,20 @@ function UpdateRow() {
         ? <button type="button" onClick={() => applyUpdate()} className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 font-medium text-on-accent"><RefreshCw size={14} /> {state === 'ready' ? 'Update now' : 'Reload'}</button>
         : <button type="button" disabled={state === 'checking'} onClick={() => checkForUpdate()} className="flex items-center gap-1.5 rounded-lg bg-wash px-3 py-2 hover:bg-wash-2 disabled:opacity-60"><RefreshCw size={14} className={state === 'checking' ? 'animate-spin' : ''} /> Check for updates</button>}
       {news && <WhatsNewDialog onClose={() => setNews(false)} />}
+    </div>
+  )
+}
+
+/** V6.4: how much things move. The choice moves itself, so you can feel it before keeping it. */
+function MotionPicker() {
+  const { prefs, set } = usePrefs()
+  const sysStill = reduceMotion()
+  const value = prefs.motion === 'auto' || !prefs.motion ? (sysStill ? 'still' : 'calm') : prefs.motion
+  const notes = { calm: 'Smooth and quiet — things glide, nothing bounces.', lively: 'A little more spring and travel, for those who enjoy it.', still: 'Almost nothing moves. Changes happen instantly.' }
+  return (
+    <div className="space-y-1.5" role="group" aria-label="Motion">
+      <Segmented value={value} onChange={(motion) => set({ motion })} options={[{ value: 'calm', label: 'Calm' }, { value: 'lively', label: 'Lively' }, { value: 'still', label: 'Still' }]} />
+      <p key={value} className="animate-pop text-[12px] text-faint">{notes[value]}{sysStill && prefs.motion === 'auto' ? ' (Your device asks for less motion.)' : ''}</p>
     </div>
   )
 }

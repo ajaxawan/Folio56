@@ -1,3 +1,5 @@
+import { flushSync } from 'react-dom'
+import { recentTap, reduceMotion, viewTransition } from './motion'
 import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
 
 export type ThemeKey = 'charcoal' | 'graphite' | 'espresso' | 'ember' | 'moss' | 'arctic' | 'tide' | 'dusk' | 'plum' | 'midnight' | 'oled'
@@ -36,6 +38,8 @@ export interface Prefs {
   accentHex: string | null
   /** V5.9: AI features are a choice. null = not decided yet (on if a Groq key is already saved). */
   ai: boolean | null
+  /** V6.4: how much things move. 'auto' = calm, or still when the device asks to reduce motion. */
+  motion: 'auto' | 'calm' | 'lively' | 'still'
 }
 
 /** Dark-only, low-glare themes. Each suggests an accent that suits it. */
@@ -78,7 +82,7 @@ const DEFAULTS: Prefs = {
   theme: 'charcoal', lightTheme: 'paper', mode: 'dark', accent: 'sky', titleFont: 'serif', name: '',
   cardStyle: 'vivid', density: 'comfortable', layout: 'grid', sort: 'custom',
   font: 'sans', textSize: 'md', width: 'narrow', typewriter: false, showCounts: true, candlelight: 'auto', grain: true, todayCollapsed: false,
-  wallpaper: 'none', wpDim: 0.5, wpBlur: 0, wpGlass: 0.72, accentHex: null, ai: null,
+  wallpaper: 'none', wpDim: 0.5, wpBlur: 0, wpGlass: 0.72, accentHex: null, ai: null, motion: 'auto',
 }
 const KEY = 'folio.prefs'
 
@@ -104,6 +108,15 @@ const prefersLight = () => typeof window !== 'undefined' && !!window.matchMedia?
 export function PrefsProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefs] = useState<Prefs>(load)
   const [sysLight, setSysLight] = useState(prefersLight)
+  const [sysStill, setSysStill] = useState(reduceMotion)
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)'); if (!mq) return
+    const on = () => setSysStill(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  const motionLevel = prefs.motion === 'auto' || !prefs.motion ? (sysStill ? 'still' : 'calm') : prefs.motion
+  useLayoutEffect(() => { document.documentElement.dataset.motion = motionLevel }, [motionLevel])
   useEffect(() => {
     const mq = window.matchMedia?.('(prefers-color-scheme: light)'); if (!mq) return
     const on = () => setSysLight(mq.matches)
@@ -124,11 +137,17 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--color-accent-ink', light ? `color-mix(in oklab, ${accent} 55%, #1b1b1b)` : accent)
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', (getComputedStyle(root).getPropertyValue('--color-canvas-solid').trim() || getComputedStyle(root).getPropertyValue('--color-canvas').trim()) || '#141416')
   }, [theme, light, prefs.accent, prefs.accentHex, prefs.titleFont])
-  const set = (p: Partial<Prefs>) => setPrefs((cur) => {
+  const apply = (p: Partial<Prefs>) => setPrefs((cur) => {
     const next = { ...cur, ...p }
     try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
     return next
   })
+  // V6.4: a theme you tap spreads out from where you tapped (hover previews don't come through here)
+  const set = (p: Partial<Prefs>) => {
+    const looks = ['theme', 'lightTheme', 'mode', 'accent', 'accentHex'].some((k) => k in p && p[k as keyof Prefs] !== prefs[k as keyof Prefs])
+    if (looks && recentTap(1500)) viewTransition(() => flushSync(() => apply(p)), 'reveal')
+    else apply(p)
+  }
   return <Ctx.Provider value={{ prefs, set, dark: !light, theme }}>{children}</Ctx.Provider>
 }
 
